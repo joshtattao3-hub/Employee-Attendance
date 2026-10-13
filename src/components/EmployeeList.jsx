@@ -1,36 +1,13 @@
-import { getStatus, getActionState } from "../utils/attendance";
+import {
+  getStatus,
+  getTodayRecord,
+  formatTime,
+  calculateHours,
+} from "../utils/attendance";
 import Avatar from "./Avatar";
 import StatusBadge from "./StatusBadge";
 import SearchBar from "./SearchBar";
-import { LogInIcon, LogOutIcon, SearchIcon } from "./Icons";
-
-// One Time In / Time Out button. The tooltip lives on the wrapper because
-// browsers don't reliably show tooltips on disabled buttons.
-function ActionButton({ kind, name, enabled, reason, onClick }) {
-  const isIn = kind === "in";
-  const label = isIn ? "Time In" : "Time Out";
-  const ActionIcon = isIn ? LogInIcon : LogOutIcon;
-
-  return (
-    <span
-      className={`action-wrap ${enabled ? "" : "action-wrap--disabled"}`}
-      title={enabled ? undefined : reason}
-    >
-      <button
-        type="button"
-        className={`action-btn action-btn--${kind}`}
-        onClick={onClick}
-        disabled={!enabled}
-        aria-label={
-          enabled ? `${label} ${name}` : `${label} ${name}: ${reason}`
-        }
-      >
-        <ActionIcon size={16} />
-        {label}
-      </button>
-    </span>
-  );
-}
+import { SearchIcon } from "./Icons";
 
 function EmployeeList({
   employees,
@@ -38,8 +15,6 @@ function EmployeeList({
   totalCount,
   searchTerm,
   onSearchChange,
-  onTimeIn,
-  onTimeOut,
 }) {
   const isSearching = searchTerm.trim() !== "";
   const subtitle = isSearching
@@ -50,7 +25,7 @@ function EmployeeList({
     <section className="card panel">
       <div className="panel__header">
         <div>
-          <h2 className="panel__title">Employee attendance</h2>
+          <h2 className="panel__title">Today’s attendance</h2>
           <p className="panel__subtitle">{subtitle}</p>
         </div>
         <SearchBar value={searchTerm} onChange={onSearchChange} />
@@ -76,20 +51,20 @@ function EmployeeList({
         </div>
       ) : (
         <div className="table-wrapper">
-          <table className="data-table">
+          <table className="data-table data-table--directory">
             <thead>
               <tr>
                 <th>Employee</th>
                 <th>ID</th>
                 <th>Status</th>
-                <th>Actions</th>
+                <th>Time In</th>
+                <th>Time Out</th>
+                <th>Hours</th>
               </tr>
             </thead>
             <tbody>
               {employees.map((emp) => {
-                const status = getStatus(records, emp.id);
-                const actions = getActionState(records, emp.id);
-
+                const today = getTodayRecord(records, emp.id);
                 return (
                   <tr key={emp.id}>
                     <td>
@@ -100,25 +75,12 @@ function EmployeeList({
                     </td>
                     <td className="cell-id">{emp.id}</td>
                     <td>
-                      <StatusBadge status={status} />
+                      <StatusBadge status={getStatus(records, emp.id)} />
                     </td>
-                    <td>
-                      <div className="row-actions">
-                        <ActionButton
-                          kind="in"
-                          name={emp.name}
-                          enabled={actions.canTimeIn}
-                          reason={actions.timeInReason}
-                          onClick={() => onTimeIn(emp.id)}
-                        />
-                        <ActionButton
-                          kind="out"
-                          name={emp.name}
-                          enabled={actions.canTimeOut}
-                          reason={actions.timeOutReason}
-                          onClick={() => onTimeOut(emp.id)}
-                        />
-                      </div>
+                    <td className="cell-num">{formatTime(today?.timeIn)}</td>
+                    <td className="cell-num">{formatTime(today?.timeOut)}</td>
+                    <td className="cell-num">
+                      {calculateHours(today?.timeIn, today?.timeOut)}
                     </td>
                   </tr>
                 );

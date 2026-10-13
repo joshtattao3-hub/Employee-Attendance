@@ -4,7 +4,10 @@ const STATUS_CONFIG = {
   "Timed In": { label: "Clocked in", tone: "success" },
   "Timed Out": { label: "Clocked out", tone: "info" },
   "In progress": { label: "In progress", tone: "success" },
+  "Missed time-out": { label: "Missed time-out", tone: "warning" },
   Completed: { label: "Completed", tone: "info" },
+  Active: { label: "Active", tone: "success" },
+  Inactive: { label: "Inactive", tone: "neutral" },
 };
 
 function StatusBadge({ status }) {

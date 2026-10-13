@@ -1,21 +1,26 @@
 import { useState } from "react";
-import { employees } from "../data/employees";
+import { useData } from "../hooks/useData";
 import LiveClock from "../components/LiveClock";
 import SummaryCards from "../components/SummaryCards";
 import EmployeeList from "../components/EmployeeList";
 import RecentActivity from "../components/RecentActivity";
 
-function DashboardPage({ records, onTimeIn, onTimeOut, onNavigate }) {
+// Admin overview. Read-only: employees clock themselves in and out.
+function DashboardPage({ records, onNavigate }) {
+  const { employees } = useData();
   const [searchTerm, setSearchTerm] = useState("");
 
-  // Build a filtered copy for display. The original employees array is untouched.
+  // Deactivated employees don't appear in today's attendance
+  const activeEmployees = employees.filter((emp) => emp.active !== false);
+
+  // Build a filtered copy for display. The original arrays are untouched.
   const query = searchTerm.trim().toLowerCase();
-  const filteredEmployees = employees.filter(
+  const filteredEmployees = activeEmployees.filter(
     (emp) =>
       emp.name.toLowerCase().includes(query) ||
       emp.id.toLowerCase().includes(query)
   );
- 
+
   return (
     <>
       <LiveClock />
@@ -23,11 +28,9 @@ function DashboardPage({ records, onTimeIn, onTimeOut, onNavigate }) {
       <EmployeeList
         employees={filteredEmployees}
         records={records}
-        totalCount={employees.length}
+        totalCount={activeEmployees.length}
         searchTerm={searchTerm}
         onSearchChange={setSearchTerm}
-        onTimeIn={onTimeIn}
-        onTimeOut={onTimeOut}
       />
       <RecentActivity
         records={records}

@@ -35,10 +35,10 @@ export function getLatestRecord(records, employeeId) {
   return mine[mine.length - 1];
 }
 
-// Status is derived from the latest record, never stored separately
+// Status for TODAY. Older records (including missed time-outs) don't count.
 export function getStatus(records, employeeId) {
   const latest = getLatestRecord(records, employeeId);
-  if (!latest) return "Not Timed In";
+  if (!latest || !isToday(latest.timeIn)) return "Not Timed In";
   if (latest.timeOut === null) return "Timed In";
   return "Timed Out";
 }
@@ -56,28 +56,26 @@ export function getInitials(name) {
 
 // Status of a single history record
 export function getRecordStatus(record) {
-  return record.timeOut === null ? "In progress" : "Completed";
+  if (record.timeOut !== null) return "Completed";
+  return isToday(record.timeIn) ? "In progress" : "Missed time-out";
 }
 
-// Numbers for the dashboard cards, calculated fresh from the real data
 export function getSummary(employees, records) {
-  const total = employees.length;
+  // Deactivated employees don't count toward today's numbers
+  const active = employees.filter((e) => e.active !== false);
+  const activeIds = new Set(active.map((e) => e.id));
 
-  // Employees whose latest record is still open
-  const clockedIn = employees.filter(
+  const total = active.length;
+  const clockedIn = active.filter(
     (emp) => getStatus(records, emp.id) === "Timed In"
   ).length;
-
-  // Records from today that have a time-out
-  const completed = records.filter(
-    (r) => r.timeOut !== null && isToday(r.timeIn)
+  const notYet = active.filter(
+    (emp) => getStatus(records, emp.id) === "Not Timed In"
   ).length;
-
-  // Employees with no record today and no open shift
-  const notYet = employees.filter((emp) => {
-    const latest = getLatestRecord(records, emp.id);
-    return !latest || (latest.timeOut !== null && !isToday(latest.timeIn));
-  }).length;
+  const completed = records.filter(
+    (r) =>
+      activeIds.has(r.employeeId) && r.timeOut !== null && isToday(r.timeIn)
+  ).length;
 
   return { total, clockedIn, completed, notYet };
 }
@@ -86,8 +84,8 @@ export function getSummary(employees, records) {
 export function getActionState(records, employeeId) {
   const latest = getLatestRecord(records, employeeId);
 
-  // Never clocked in
-  if (!latest) {
+  // Nothing today: no record, or only older days
+  if (!latest || !isToday(latest.timeIn)) {
     return {
       canTimeIn: true,
       canTimeOut: false,
@@ -96,7 +94,7 @@ export function getActionState(records, employeeId) {
     };
   }
 
-  // Currently clocked in (open record)
+  // Clocked in today and not yet out
   if (latest.timeOut === null) {
     return {
       canTimeIn: false,
@@ -106,12 +104,30 @@ export function getActionState(records, employeeId) {
     };
   }
 
-  // Already clocked out: can only clock in again on a later day
-  const finishedToday = isToday(latest.timeIn);
+  // Finished today
   return {
-    canTimeIn: !finishedToday,
+    canTimeIn: false,
     canTimeOut: false,
-    timeInReason: finishedToday ? "Shift already completed today" : "",
+    timeInReason: "Shift already completed today",
     timeOutReason: "Already clocked out",
   };
+}
+
+export function isMissedTimeOut(record) {
+  return record.timeOut === null && !isToday(record.timeIn);
+}
+
+// "0:07:05" style duration from milliseconds
+export function formatDuration(ms) {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+// The employee's record for today, or null
+export function getTodayRecord(records, employeeId) {
+  const latest = getLatestRecord(records, employeeId);
+  return latest && isToday(latest.timeIn) ? latest : null;
 }

@@ -7,9 +7,9 @@ import {
 import Avatar from "./Avatar";
 import StatusBadge from "./StatusBadge";
 
-function RecordsTable({ records, employees }) {
+function RecordsTable({ records, employees = [], showEmployee = true }) {
   const getName = (employeeId) =>
-    employees.find((e) => e.id === employeeId).name;
+    employees.find((e) => e.id === employeeId)?.name ?? "Unknown";
 
   // Copy first so the original state array is never changed
   const newestFirst = [...records].reverse();
@@ -19,8 +19,8 @@ function RecordsTable({ records, employees }) {
       <table className="data-table data-table--records">
         <thead>
           <tr>
-            <th>Employee</th>
-            <th>ID</th>
+            {showEmployee && <th>Employee</th>}
+            {showEmployee && <th>ID</th>}
             <th>Date</th>
             <th>Time In</th>
             <th>Time Out</th>
@@ -30,16 +30,18 @@ function RecordsTable({ records, employees }) {
         </thead>
         <tbody>
           {newestFirst.map((record) => {
-            const name = getName(record.employeeId);
+            const name = showEmployee ? getName(record.employeeId) : "";
             return (
               <tr key={record.id}>
-                <td>
-                  <div className="employee-cell">
-                    <Avatar name={name} size="sm" />
-                    <span className="employee-cell__name">{name}</span>
-                  </div>
-                </td>
-                <td className="cell-id">{record.employeeId}</td>
+                {showEmployee && (
+                  <td>
+                    <div className="employee-cell">
+                      <Avatar name={name} size="sm" />
+                      <span className="employee-cell__name">{name}</span>
+                    </div>
+                  </td>
+                )}
+                {showEmployee && <td className="cell-id">{record.employeeId}</td>}
                 <td>{formatDate(record.timeIn)}</td>
                 <td className="cell-num">{formatTime(record.timeIn)}</td>
                 <td className="cell-num">{formatTime(record.timeOut)}</td>

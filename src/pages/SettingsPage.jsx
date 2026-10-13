@@ -1,6 +1,21 @@
+import { useData } from "../hooks/useData";
+import { useToast } from "../hooks/useToast";
+
 function SettingsPage() {
   // The browser's own time zone, e.g. "Asia/Manila"
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+   const { resetDemoData } = useData();
+   const { showToast } = useToast();
+
+   function handleReset() {
+     const ok = window.confirm(
+       "Reset all demo data? Employees and attendance records return to their starting state."
+     );
+     if (!ok) return;
+     resetDemoData();
+     showToast("success", "Demo data has been reset.");
+   }
 
   const rows = [
     { label: "Company", value: "Hirara" },
@@ -12,7 +27,7 @@ function SettingsPage() {
     {
       label: "Data storage",
       value:
-        "Demo data is kept in memory only and resets when the page is refreshed.",
+        "Demo data is saved in this browser only (localStorage) and never leaves your device.",
     },
   ];
 
@@ -33,6 +48,11 @@ function SettingsPage() {
           </div>
         ))}
       </dl>
+            <div className="settings-footer">
+        <button type="button" className="btn-secondary" onClick={handleReset}>
+          Reset demo data
+        </button>
+      </div>
     </section>
   );
 }

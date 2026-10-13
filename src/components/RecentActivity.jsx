@@ -1,4 +1,4 @@
-import { employees } from "../data/employees";
+import { useData } from "../hooks/useData";
 import RecordsTable from "./RecordsTable";
 import { RecordsIcon } from "./Icons";
 
@@ -6,6 +6,7 @@ const PREVIEW_COUNT = 5;
 
 function RecentActivity({ records, onViewAll }) {
   // The last 5 records (the table puts the newest on top)
+  const { employees } = useData();
   const recent = records.slice(-PREVIEW_COUNT);
 
   return (

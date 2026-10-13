@@ -1,36 +1,62 @@
 import { useState } from "react";
-import { employees } from "../data/employees";
+import { useData } from "../hooks/useData";
+import { useToast } from "../hooks/useToast";
 import { getRecordStatus, getDateKey } from "../utils/attendance";
+import { recordsToCsv, downloadCsv } from "../utils/csv";
 import SearchBar from "../components/SearchBar";
 import RecordsTable from "../components/RecordsTable";
-import { RecordsIcon, SearchIcon } from "../components/Icons";
+import { RecordsIcon, SearchIcon, DownloadIcon } from "../components/Icons";
 
 function RecordsPage({ records }) {
+  const { employees } = useData();
+  const { showToast } = useToast();
+
   const [searchTerm, setSearchTerm] = useState("");
+  const [employeeId, setEmployeeId] = useState("all");
   const [status, setStatus] = useState("all");
   const [date, setDate] = useState("");
 
   const query = searchTerm.trim().toLowerCase();
 
-  // A record is shown only if it passes all three filters
+  // A record is shown only if it passes all four filters
   const filtered = records.filter((record) => {
     const employee = employees.find((e) => e.id === record.employeeId);
+    const name = employee?.name ?? "";
 
     const matchesSearch =
-      employee.name.toLowerCase().includes(query) ||
+      name.toLowerCase().includes(query) ||
       record.employeeId.toLowerCase().includes(query);
+    const matchesEmployee = employeeId === "all" || record.employeeId === employeeId;
     const matchesStatus = status === "all" || getRecordStatus(record) === status;
     const matchesDate = !date || getDateKey(record.timeIn) === date;
 
-    return matchesSearch && matchesStatus && matchesDate;
+    return matchesSearch && matchesEmployee && matchesStatus && matchesDate;
   });
 
-  const hasFilters = query !== "" || status !== "all" || date !== "";
+  const hasFilters =
+    query !== "" || employeeId !== "all" || status !== "all" || date !== "";
+
+  // Everyone, including deactivated employees, because their history is kept
+  const employeeOptions = [...employees].sort((a, b) =>
+    a.name.localeCompare(b.name)
+  );
 
   function clearFilters() {
     setSearchTerm("");
+    setEmployeeId("all");
     setStatus("all");
     setDate("");
+  }
+
+  function handleExport() {
+    // Newest first, the same order as the table
+    const csv = recordsToCsv([...filtered].reverse(), employees);
+    const stamp = getDateKey(new Date().toISOString());
+    downloadCsv(`attendance-records-${stamp}.csv`, csv);
+    showToast(
+      "success",
+      `Exported ${filtered.length} ${filtered.length === 1 ? "record" : "records"} to CSV.`
+    );
   }
 
   const subtitle = hasFilters
@@ -41,12 +67,38 @@ function RecordsPage({ records }) {
     <section className="card panel">
       <div className="panel__header">
         <div>
+          <h2 className="panel__title">Attendance records</h2>
           <p className="panel__subtitle">{subtitle}</p>
         </div>
+        <button
+          type="button"
+          className="btn-secondary btn-with-icon"
+          onClick={handleExport}
+          disabled={filtered.length === 0}
+        >
+          <DownloadIcon size={16} />
+          Export CSV
+        </button>
       </div>
 
       <div className="toolbar">
         <SearchBar value={searchTerm} onChange={setSearchTerm} />
+
+        <label className="field">
+          <span className="field__label">Employee</span>
+          <select
+            className="field__control"
+            value={employeeId}
+            onChange={(e) => setEmployeeId(e.target.value)}
+          >
+            <option value="all">All employees</option>
+            {employeeOptions.map((emp) => (
+              <option key={emp.id} value={emp.id}>
+                {emp.name} ({emp.id}){emp.active === false ? " · inactive" : ""}
+              </option>
+            ))}
+          </select>
+        </label>
 
         <label className="field">
           <span className="field__label">Status</span>
@@ -58,6 +110,7 @@ function RecordsPage({ records }) {
             <option value="all">All statuses</option>
             <option value="In progress">In progress</option>
             <option value="Completed">Completed</option>
+            <option value="Missed time-out">Missed time-out</option>
           </select>
         </label>
 

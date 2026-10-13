@@ -8,7 +8,7 @@ import {
 
 // Each card: which number to show, its label, icon, and color tone
 const CARDS = [
-  { key: "total", label: "Total Employees", hint: "Registered staff", icon: UsersIcon, tone: "neutral" },
+  { key: "total", label: "Total Employees", hint: "Active staff", icon: UsersIcon, tone: "neutral" },
   { key: "clockedIn", label: "Currently Clocked In", hint: "Working now", icon: LogInIcon, tone: "success" },
   { key: "completed", label: "Completed Shifts", hint: "Finished today", icon: CheckCircleIcon, tone: "info" },
   { key: "notYet", label: "Not Yet Clocked In", hint: "Awaiting clock-in", icon: ClockIcon, tone: "warning" },

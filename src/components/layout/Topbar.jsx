@@ -1,18 +1,6 @@
-import { MenuIcon, CalendarIcon } from "../Icons";
+import { MenuIcon } from "../Icons";
 
 function Topbar({ title, onMenuClick }) {
-  const now = new Date();
-  const longDate = now.toLocaleDateString("en-US", {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
-  const shortDate = now.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-  });
-
   return (
     <header className="topbar">
       <div className="topbar__left">
