@@ -1,181 +1,178 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AuthContext } from "./authContext";
-import { useData } from "../hooks/useData";
 import { useToast } from "../hooks/useToast";
-import { useLocalStorage } from "../hooks/useLocalStorage";
-import { hashPassword, createSalt } from "../utils/password";
-import { createId, getNextEmployeeId } from "../utils/id";
+import { supabase, isSupabaseConfigured } from "../lib/supabase";
 
-const SESSION_KEY = "hirara:v1:session";
-const isSessionValue = (v) => v === null || typeof v === "string";
+const PROFILE_COLUMNS =
+  "id, email, role, active, must_change_password, " +
+  "employee:employees(id, employee_code, full_name, branch_id, job_title, active)";
 
-const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+function friendlySignInError(error) {
+  if (error.status === 429 || error.code === "over_request_rate_limit") {
+    return "Too many attempts. Wait a few minutes and try again.";
+  }
+  if (error.code === "invalid_credentials") {
+    return "Invalid email or password.";
+  }
+  return "We couldn’t sign you in. Check your connection and try again.";
+}
+
+function friendlyPasswordError(error) {
+  if (error.code === "same_password") {
+    return "Choose a password that is different from your current one.";
+  }
+  if (error.code === "weak_password") {
+    return "That password is too weak. Use at least 8 characters with a letter and a number.";
+  }
+  return "We couldn’t change your password. Check your connection and try again.";
+}
 
 export function AuthProvider({ children }) {
-  const { accounts, setAccounts, employees, setEmployees } = useData();
   const { showToast } = useToast();
-  // Only the account ID is saved. Everything else is looked up fresh.
-  const [sessionId, setSessionId] = useLocalStorage(
-    SESSION_KEY,
-    null,
-    isSessionValue
-  );
 
-  // The signed-in user, or null. A deactivated employee counts as signed out.
+  const [session, setSession] = useState(null);
+  const [sessionReady, setSessionReady] = useState(!isSupabaseConfigured);
+  // The loaded profile belongs to one user. If the signed-in user changes,
+  // the old profile no longer matches and we treat the app as loading.
+  const [loaded, setLoaded] = useState({ userId: null, profile: null, failed: false });
+  const [reloadKey, setReloadKey] = useState(0);
+  const [notice, setNotice] = useState("");
+
+  // 1. Keep track of the Supabase session (restored automatically after a refresh).
+  useEffect(() => {
+    if (!supabase) return;
+    let active = true;
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (!active) return;
+      setSession(data.session);
+      setSessionReady(true);
+    });
+
+    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession);
+      setSessionReady(true);
+    });
+
+    return () => {
+      active = false;
+      data.subscription.unsubscribe();
+    };
+  }, []);
+
+  const userId = session?.user?.id ?? null;
+
+  // 2. Load who this person is (role, employee record). Row-level security
+  //    returns nothing for anyone who is deactivated or has no profile.
+  useEffect(() => {
+    if (!supabase || !userId) return;
+    let cancelled = false;
+
+    (async () => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select(PROFILE_COLUMNS)
+        .eq("id", userId)
+        .maybeSingle();
+      if (cancelled) return;
+
+      if (error) {
+        setLoaded({ userId, profile: null, failed: true });
+        return;
+      }
+
+      const hasAccess = data && (data.role === "admin" || data.employee);
+      if (!hasAccess) {
+        setNotice("This account doesn’t have access. Contact your administrator.");
+        await supabase.auth.signOut();
+        return;
+      }
+
+      setLoaded({ userId, profile: data, failed: false });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, reloadKey]);
+
+  const loading = !sessionReady || (userId !== null && loaded.userId !== userId);
+  const loadFailed = userId !== null && loaded.userId === userId && loaded.failed;
+
   const currentUser = useMemo(() => {
-    const account = accounts.find((a) => a.id === sessionId);
-    if (!account) return null;
+    if (!userId || loaded.userId !== userId || !loaded.profile) return null;
+    const { profile } = loaded;
+    const employee = profile.employee;
+    return {
+      id: profile.id,
+      email: profile.email,
+      role: profile.role,
+      name: employee?.full_name ?? "Administrator",
+      // The screens still use demo data keyed by employee code (EMP001...)
+      // until the data moves to the database in the next stage.
+      employeeId: employee?.employee_code ?? null,
+      employeeUuid: employee?.id ?? null,
+      branchId: employee?.branch_id ?? null,
+      mustChangePassword: profile.must_change_password,
+    };
+  }, [userId, loaded]);
 
-    if (account.role === "admin") {
+  const login = useCallback(async (email, password) => {
+    if (!supabase) {
+      return { ok: false, error: "The app isn’t connected to its database yet." };
+    }
+    setNotice("");
+    const { error } = await supabase.auth.signInWithPassword({
+      email: email.trim().toLowerCase(),
+      password,
+    });
+    if (error) return { ok: false, error: friendlySignInError(error) };
+    return { ok: true };
+  }, []);
+
+  const logout = useCallback(async () => {
+    if (!supabase) return;
+    await supabase.auth.signOut();
+    showToast("success", "You have been signed out.");
+  }, [showToast]);
+
+  // Used on the forced "choose a new password" screen.
+  const changePassword = useCallback(async (newPassword) => {
+    if (!supabase) return { ok: false, error: "The app isn’t connected to its database yet." };
+
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) return { ok: false, error: friendlyPasswordError(error) };
+
+    const { error: flagError } = await supabase.rpc("finish_password_change");
+    if (flagError) {
       return {
-        id: account.id,
-        email: account.email,
-        role: "admin",
-        name: account.name,
-        employeeId: null,
+        ok: false,
+        error: "Your password was changed, but setup didn’t finish. Sign out and sign in with your new password.",
       };
     }
 
-    const employee = employees.find((e) => e.id === account.employeeId);
-    if (!employee || !employee.active) return null;
+    setReloadKey((key) => key + 1);
+    return { ok: true };
+  }, []);
 
-    return {
-      id: account.id,
-      email: account.email,
-      role: "employee",
-      name: employee.name,
-      employeeId: employee.id,
-    };
-  }, [accounts, employees, sessionId]);
-
-  const login = useCallback(
-    async (email, password) => {
-      await wait(500); // short pause so the loading state is visible
-
-      const normalized = email.trim().toLowerCase();
-      const account = accounts.find((a) => a.email === normalized);
-
-      // Hash even when the email is unknown, so timing doesn't reveal it
-      let hash;
-      try {
-        hash = await hashPassword(password, account?.salt ?? "no-account");
-      } catch (error) {
-        return { ok: false, error: error.message };
-      }
-
-      if (!account || hash !== account.passwordHash) {
-        return { ok: false, error: "Invalid email or password." };
-      }
-
-      // Only tell someone their account is deactivated after the password matched
-      let name = account.name;
-      if (account.role === "employee") {
-        const employee = employees.find((e) => e.id === account.employeeId);
-        if (!employee || !employee.active) {
-          return {
-            ok: false,
-            error: "This account has been deactivated. Contact your administrator.",
-          };
-        }
-        name = employee.name;
-      }
-
-      setSessionId(account.id);
-      showToast("success", `Welcome back, ${name}.`);
-      return { ok: true };
-    },
-    [accounts, employees, setSessionId, showToast]
-  );
-
-  // Creates an employee account. If an active employee record already uses
-  // this email, the account is linked to it instead of creating a duplicate.
-  const signup = useCallback(
-    async ({ name, email, password }) => {
-      await wait(500);
-
-      const cleanName = name.trim().replace(/\s+/g, " ");
-      const normalized = email.trim().toLowerCase();
-
-      if (accounts.some((a) => a.email === normalized)) {
-        return {
-          ok: false,
-          field: "email",
-          error: "An account with this email already exists. Try signing in.",
-        };
-      }
-
-      const existing = employees.find(
-        (e) => e.email?.toLowerCase() === normalized
-      );
-
-      if (existing) {
-        if (!existing.active) {
-          return {
-            ok: false,
-            field: "email",
-            error: "This employee record is deactivated. Contact your administrator.",
-          };
-        }
-        if (accounts.some((a) => a.employeeId === existing.id)) {
-          return {
-            ok: false,
-            field: "email",
-            error: "This employee already has an account. Try signing in.",
-          };
-        }
-      }
-
-      let salt;
-      let passwordHash;
-      try {
-        salt = createSalt();
-        passwordHash = await hashPassword(password, salt);
-      } catch (error) {
-        return { ok: false, error: error.message };
-      }
-
-      const employee = existing ?? {
-        id: getNextEmployeeId(employees),
-        name: cleanName,
-        email: normalized,
-        department: "Unassigned",
-        position: "Team Member",
-        active: true,
-      };
-
-      const account = {
-        id: createId("acc"),
-        email: normalized,
-        name: employee.name,
-        role: "employee",
-        employeeId: employee.id,
-        salt,
-        passwordHash,
-      };
-
-      if (!existing) setEmployees((prev) => [...prev, employee]);
-      setAccounts((prev) => [...prev, account]);
-      setSessionId(account.id);
-
-      showToast(
-        "success",
-        existing
-          ? `Account linked to your employee record. Welcome, ${employee.name}.`
-          : `Account created. Welcome, ${employee.name}.`
-      );
-      return { ok: true };
-    },
-    [accounts, employees, setAccounts, setEmployees, setSessionId, showToast]
-  );
-
-  const logout = useCallback(() => {
-    setSessionId(null);
-    showToast("success", "You have been signed out.");
-  }, [setSessionId, showToast]);
+  const reload = useCallback(() => {
+    setLoaded({ userId: null, profile: null, failed: false });
+    setReloadKey((key) => key + 1);
+  }, []);
 
   const value = useMemo(
-    () => ({ currentUser, login, signup, logout }),
-    [currentUser, login, signup, logout]
+    () => ({
+      currentUser,
+      loading,
+      loadFailed,
+      notConfigured: !isSupabaseConfigured,
+      authNotice: notice,
+      login,
+      logout,
+      changePassword,
+      reload,
+    }),
+    [currentUser, loading, loadFailed, notice, login, logout, changePassword, reload]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

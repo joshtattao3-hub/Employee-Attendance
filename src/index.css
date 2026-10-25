@@ -1822,3 +1822,103 @@ button:disabled {
     transition: none;
   }
 }
+
+/* ---------- Stage 2: real sign-in ---------- */
+.alert--info {
+  background: var(--color-info-soft);
+  color: #1e3a8a;
+  border: 1px solid #bfdbfe;
+}
+
+.modal__alert {
+  margin: var(--space-4) 0 0;
+}
+
+.spinner--dark {
+  border-color: rgba(15, 23, 42, 0.15);
+  border-top-color: var(--color-primary);
+}
+
+.status-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: var(--space-5);
+}
+
+.status-screen__card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  max-width: 420px;
+  padding: var(--space-6);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  text-align: center;
+}
+
+.status-screen__title {
+  margin: 0;
+  font-size: var(--text-lg);
+}
+
+.status-screen__text {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+
+.status-screen__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+
+.secret-list {
+  margin: 0;
+  display: grid;
+  gap: var(--space-3);
+}
+
+.secret-list dt {
+  margin-bottom: var(--space-1);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.secret-list dd {
+  margin: 0;
+}
+
+.secret-list code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.95rem;
+  word-break: break-all;
+}
+
+.secret-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-neutral-soft);
+  border: 1px dashed #cbd5e1;
+  border-radius: var(--radius-sm);
+}
+
+.secret-box code {
+  font-size: 1.15rem;
+  letter-spacing: 0.04em;
+  user-select: all;
+}

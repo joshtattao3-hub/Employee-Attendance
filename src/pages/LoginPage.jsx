@@ -1,25 +1,17 @@
 import { useState } from "react";
 import { useAuth } from "../hooks/useAuth";
-import { DEMO_CREDENTIALS } from "../data/accounts";
 import { validateEmail, validateRequired } from "../utils/validation";
 import FormField from "../components/FormField";
 import { AlertCircleIcon } from "../components/Icons";
 
-function LoginPage({ onSwitch }) {
-  const { login } = useAuth();
+function LoginPage() {
+  const { login, authNotice } = useAuth();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [errors, setErrors] = useState({});
   const [formError, setFormError] = useState("");
   const [loading, setLoading] = useState(false);
-
-  function fillDemo(demo) {
-    setEmail(demo.email);
-    setPassword(demo.password);
-    setErrors({});
-    setFormError("");
-  }
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -30,7 +22,14 @@ function LoginPage({ onSwitch }) {
       password: validateRequired(password, "Enter your password."),
     };
     setErrors(nextErrors);
-    if (nextErrors.email || nextErrors.password) return;
+    if (nextErrors.email) {
+      document.getElementById("login-email")?.focus();
+      return;
+    }
+    if (nextErrors.password) {
+      document.getElementById("login-password")?.focus();
+      return;
+    }
 
     setLoading(true);
     const result = await login(email, password);
@@ -46,6 +45,13 @@ function LoginPage({ onSwitch }) {
     <>
       <h1 className="auth__title">Sign in</h1>
       <p className="auth__subtitle">Welcome back. Enter your details to continue.</p>
+
+      {authNotice && !formError && (
+        <div className="alert alert--info" role="status">
+          <AlertCircleIcon size={18} />
+          <span>{authNotice}</span>
+        </div>
+      )}
 
       {formError && (
         <div className="alert alert--error" role="alert">
@@ -100,43 +106,9 @@ function LoginPage({ onSwitch }) {
         </button>
       </form>
 
-      <p className="auth__switch">
-        New to Hirara?{" "}
-        <button type="button" className="link-btn" onClick={onSwitch} disabled={loading}>
-          Create an account
-        </button>
+      <p className="auth__note">
+        Forgot your password? Ask your administrator to reset it for you.
       </p>
-
-      <div className="demo-box">
-        <p className="demo-box__title">Demo accounts</p>
-        <p className="demo-box__note">
-          Demo mode: sign-in runs entirely in your browser and is not secure.
-          Don’t enter a real password anywhere in this app.
-        </p>
-        <ul className="demo-box__list">
-          {DEMO_CREDENTIALS.map((demo) => (
-            <li key={demo.email} className="demo-box__row">
-              <div>
-                <p className="demo-box__role">{demo.role}</p>
-                <p className="demo-box__cred">
-                  <code>{demo.email}</code>
-                </p>
-                <p className="demo-box__cred">
-                  <code>{demo.password}</code>
-                </p>
-              </div>
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={() => fillDemo(demo)}
-                disabled={loading}
-              >
-                Use
-              </button>
-            </li>
-          ))}
-        </ul>
-      </div>
     </>
   );
 }

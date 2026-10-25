@@ -4,10 +4,14 @@ const STATUS_CONFIG = {
   "Timed In": { label: "Clocked in", tone: "success" },
   "Timed Out": { label: "Clocked out", tone: "info" },
   "In progress": { label: "In progress", tone: "success" },
-  "Missed time-out": { label: "Missed time-out", tone: "warning" },
   Completed: { label: "Completed", tone: "info" },
+  "Missed time-out": { label: "Missed time-out", tone: "warning" },
   Active: { label: "Active", tone: "success" },
   Inactive: { label: "Inactive", tone: "neutral" },
+  "No login": { label: "No login", tone: "neutral" },
+  "Login active": { label: "Login active", tone: "success" },
+  "Password change pending": { label: "Password change pending", tone: "warning" },
+  "Login off": { label: "Login off", tone: "neutral" },
 };
 
 function StatusBadge({ status }) {

@@ -37,7 +37,25 @@ function MyDashboardPage({ onNavigate }) {
 
   const employeeId = currentUser.employeeId;
   const employee = employees.find((e) => e.id === employeeId);
-  if (!employee) return null;
+    if (!employee) {
+       return (
+         <section className="card panel">
+           <div className="panel__header">
+             <div>
+               <h2 className="panel__title">Almost there</h2>
+               <p className="panel__subtitle">Your account is connected</p>
+             </div>
+           </div>
+           <div className="panel__body">
+             <p className="modal__text">
+               Your sign-in works, but the attendance screens still use demo data
+               stored in this browser and have no record for you yet. They connect
+               to the live database in the next update.
+             </p>
+           </div>
+         </section>
+       );
+     }
 
   // Only this employee's data
   const myRecords = attendanceRecords.filter((r) => r.employeeId === employeeId);

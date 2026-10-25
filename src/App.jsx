@@ -4,7 +4,9 @@ import { useAuth } from "./hooks/useAuth";
 import { getNavItems } from "./data/navigation";
 import Sidebar from "./components/layout/Sidebar";
 import Topbar from "./components/layout/Topbar";
+import StatusScreen from "./components/StatusScreen";
 import AuthPage from "./pages/AuthPage";
+import ChangePasswordPage from "./pages/ChangePasswordPage";
 import DashboardPage from "./pages/DashboardPage";
 import EmployeesPage from "./pages/EmployeesPage";
 import RecordsPage from "./pages/RecordsPage";
@@ -62,6 +64,13 @@ function AppShell() {
         <Topbar title={title} onMenuClick={() => setSidebarOpen(true)} />
 
         <main id="main-content" tabIndex={-1} className="content">
+          <div className="alert alert--info" role="note">
+            <span>
+              Demo data: attendance on these screens is still stored in this
+              browser. It moves to the live database in the next update.
+            </span>
+          </div>
+
           {activePage === "dashboard" && (
             <DashboardPage records={attendanceRecords} onNavigate={navigate} />
           )}
@@ -84,8 +93,40 @@ function AppShell() {
 }
 
 function App() {
-  const { currentUser } = useAuth();
-  return currentUser ? <AppShell /> : <AuthPage />;
+  const { currentUser, loading, loadFailed, notConfigured, reload, logout } = useAuth();
+
+  if (notConfigured) {
+    return (
+      <StatusScreen
+        title="Not connected to a database"
+        text="Add VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY to a .env.local file (or to your hosting settings), then restart the app."
+      />
+    );
+  }
+
+  if (loading) return <StatusScreen busy title="Loading your workspace…" />;
+
+  if (loadFailed) {
+    return (
+      <StatusScreen
+        title="We couldn’t load your account"
+        text="Check your connection and try again."
+      >
+        <div className="status-screen__actions">
+          <button type="button" className="btn-primary" onClick={reload}>
+            Try again
+          </button>
+          <button type="button" className="btn-secondary" onClick={logout}>
+            Sign out
+          </button>
+        </div>
+      </StatusScreen>
+    );
+  }
+
+  if (!currentUser) return <AuthPage />;
+  if (currentUser.mustChangePassword) return <ChangePasswordPage />;
+  return <AppShell />;
 }
 
 export default App;
