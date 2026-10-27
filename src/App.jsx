@@ -81,7 +81,10 @@ function AppShell() {
             <DashboardPage records={attendanceRecords} onNavigate={navigate} />
           )}
           {activePage === "employees" && (
-            <EmployeesPage records={attendanceRecords} />
+            <EmployeesPage 
+            records={attendanceRecords}
+            readOnly={currentUser.role !== "admin"} 
+            />
           )}
           {activePage === "branches" && (
             <BranchesPage />

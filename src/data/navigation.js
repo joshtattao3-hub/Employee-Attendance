@@ -3,7 +3,9 @@ import {
   UsersIcon,
   RecordsIcon,
   SettingsIcon,
-  BranchIcon
+  BranchIcon,
+  ClockIcon,
+  CalendarIcon
 } from "../components/Icons";
 
 const ADMIN_NAV = [
@@ -19,7 +21,16 @@ const EMPLOYEE_NAV = [
   { id: "my-attendance", label: "My Attendance", icon: RecordsIcon },
 ];
 
-// Anything that isn't exactly "admin" gets the smaller menu
+const MANAGER_NAV = [
+  { id: "my-dashboard", label: "My Dashboard", icon: ClockIcon },
+  { id: "my-attendance", label: "My Attendance", icon: CalendarIcon },
+  { id: "dashboard", label: "Team Dashboard", icon: DashboardIcon },
+  { id: "records", label: "Team Attendance", icon: RecordsIcon },
+  { id: "employees", label: "Team", icon: UsersIcon },
+];
+
 export function getNavItems(role) {
-  return role === "admin" ? ADMIN_NAV : EMPLOYEE_NAV;
+  if (role === "admin") return ADMIN_NAV;
+  if (role === "manager") return MANAGER_NAV;
+  return EMPLOYEE_NAV;
 }

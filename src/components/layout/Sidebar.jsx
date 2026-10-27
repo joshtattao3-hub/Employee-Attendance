@@ -44,7 +44,7 @@ function Sidebar({ activePage, onNavigate, isOpen, onClose }) {
            <div className="sidebar__user-info">
              <p className="sidebar__user-name">{currentUser.name}</p>
              <p className="sidebar__user-role">
-               {currentUser.role === "admin" ? "Administrator" : "Employee"}
+               {{ admin: "Administrator", manager: "Manager" }[currentUser.role] ?? "Employee"}
              </p>
            </div>
            <button

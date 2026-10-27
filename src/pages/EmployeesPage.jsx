@@ -9,7 +9,7 @@ import Modal from "../components/Modal";
 import EmployeeForm from "../components/EmployeeForm";
 import { SearchIcon, PlusIcon, AlertCircleIcon } from "../components/Icons";
 
-function EmployeesPage({ records }) {
+function EmployeesPage({ records, readOnly = false }) {
   const {
     employees,
     branches,
@@ -103,9 +103,10 @@ function EmployeesPage({ records }) {
       <section className="card panel">
         <div className="panel__header">
           <div>
-            <h2 className="panel__title">Employee directory</h2>
+            <h2 className="panel__title">{readOnly ? "Team" : "Employee directory"}</h2>
             <p className="panel__subtitle">{subtitle}</p>
           </div>
+          {!readOnly && (
           <button
             type="button"
             className="btn-primary"
@@ -114,6 +115,7 @@ function EmployeesPage({ records }) {
             <PlusIcon size={16} />
             Add employee
           </button>
+          )}
         </div>
 
         <div className="toolbar">
@@ -161,7 +163,7 @@ function EmployeesPage({ records }) {
                   <th>Branch</th>
                   <th>Status</th>
                   <th>Today</th>
-                  <th>Actions</th>
+                  {!readOnly && <th>Actions</th>}
                 </tr>
               </thead>
               <tbody>
@@ -195,6 +197,7 @@ function EmployeesPage({ records }) {
                           <span className="cell-muted">—</span>
                         )}
                       </td>
+                      {!readOnly && (
                       <td>
                         <div className="row-actions">
                           <button
@@ -228,6 +231,7 @@ function EmployeesPage({ records }) {
                           )}
                         </div>
                       </td>
+                      )}
                     </tr>
                   );
                 })}
