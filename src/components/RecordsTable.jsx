@@ -1,5 +1,5 @@
 import {
-  formatDate,
+  formatRecordDate,
   formatTime,
   calculateHours,
   getRecordStatus,
@@ -42,7 +42,7 @@ function RecordsTable({ records, employees = [], showEmployee = true }) {
                   </td>
                 )}
                 {showEmployee && <td className="cell-id">{record.employeeId}</td>}
-                <td>{formatDate(record.timeIn)}</td>
+                <td>{formatRecordDate(record)}</td>
                 <td className="cell-num">{formatTime(record.timeIn)}</td>
                 <td className="cell-num">{formatTime(record.timeOut)}</td>
                 <td className="cell-num">

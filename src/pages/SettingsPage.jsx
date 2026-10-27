@@ -1,34 +1,21 @@
-import { useData } from "../hooks/useData";
-import { useToast } from "../hooks/useToast";
 import LoginsPanel from "../components/LoginsPanel";
 
 function SettingsPage() {
-  const { resetDemoData } = useData();
-  const { showToast } = useToast();
-
   // The browser's own time zone, e.g. "Asia/Manila"
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-  function handleReset() {
-    const ok = window.confirm(
-      "Reset the demo data? Demo employees and attendance records return to their starting state."
-    );
-    if (!ok) return;
-    resetDemoData();
-    showToast("success", "Demo data has been reset.");
-  }
-
   const rows = [
     { label: "Company", value: "Hirara" },
-    { label: "Time zone", value: timeZone },
+    { label: "Your time zone", value: timeZone },
     {
       label: "Attendance rule",
-      value: "One shift per employee per day. Duplicate clock-ins are blocked.",
+      value:
+        "One shift per employee per work day. Duplicate clock-ins are blocked, and a shift left open too long becomes a missed time-out.",
     },
     {
       label: "Attendance data",
       value:
-        "Still demo data stored in this browser. It moves to the live database in the next update.",
+        "Stored in the live database. Every time is stamped by the server clock, and each work day follows the branch’s time zone.",
     },
   ];
 
@@ -52,12 +39,6 @@ function SettingsPage() {
             </div>
           ))}
         </dl>
-
-        <div className="settings-footer">
-          <button type="button" className="btn-secondary" onClick={handleReset}>
-            Reset demo data
-          </button>
-        </div>
       </section>
     </>
   );

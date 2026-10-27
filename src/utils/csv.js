@@ -3,7 +3,7 @@ import { getDateKey, getRecordStatus } from "./attendance";
 const COLUMNS = [
   "Employee ID",
   "Name",
-  "Department",
+  "Branch",
   "Date",
   "Time In",
   "Time Out",
@@ -12,7 +12,7 @@ const COLUMNS = [
 ];
 
 // Spreadsheet apps run text that starts with = + - @ as a formula. Names come
-// from signup, so neutralize those with a leading apostrophe, then quote any
+// from sign-up, so neutralize those with a leading apostrophe, then quote any
 // field that contains a comma, quote, or line break.
 function escapeCell(value) {
   let text = value === null || value === undefined ? "" : String(value);
@@ -45,8 +45,8 @@ export function recordsToCsv(records, employees) {
     return [
       record.employeeId,
       employee?.name ?? "Unknown",
-      employee?.department ?? "",
-      getDateKey(record.timeIn),
+      employee?.branchName ?? "",
+      record.workDate ?? getDateKey(record.timeIn),
       formatTime24(record.timeIn),
       formatTime24(record.timeOut),
       hoursValue(record.timeIn, record.timeOut),

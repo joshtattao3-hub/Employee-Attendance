@@ -1922,3 +1922,7 @@ button:disabled {
   letter-spacing: 0.04em;
   user-select: all;
 }
+/* ---------- Stage 3: attendance from the database ---------- */
+.panel__alert {
+  margin: var(--space-4) var(--space-5) 0;
+}

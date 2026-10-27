@@ -6,8 +6,7 @@ import {
   getActionState,
   getTodayRecord,
   getLatestRecord,
-  isMissedTimeOut,
-  formatDate,
+  formatRecordDate,
   formatTime,
   formatDuration,
 } from "../utils/attendance";
@@ -18,10 +17,11 @@ import ActionButton from "../components/ActionButton";
 import RecordsTable from "../components/RecordsTable";
 import { RecordsIcon, AlertCircleIcon } from "../components/Icons";
 
-// Ticks every second, but only this tiny component re-renders
-function LiveDuration({ since }) {
+// Ticks every second, but only this tiny component re-renders.
+// It counts against the DATABASE clock, so a wrong phone clock can't skew it.
+function LiveDuration({ since, offsetMs }) {
   const now = useClock();
-  return <>{formatDuration(now - new Date(since))}</>;
+  return <>{formatDuration(now.getTime() + offsetMs - Date.parse(since))}</>;
 }
 
 function getGreeting() {
@@ -33,48 +33,52 @@ function getGreeting() {
 
 function MyDashboardPage({ onNavigate }) {
   const { currentUser } = useAuth();
-  const { employees, attendanceRecords, handleTimeIn, handleTimeOut } = useData();
+  const {
+    employees,
+    attendanceRecords,
+    handleTimeIn,
+    handleTimeOut,
+    serverOffsetMs,
+    busy,
+  } = useData();
 
   const employeeId = currentUser.employeeId;
   const employee = employees.find((e) => e.id === employeeId);
-    if (!employee) {
-       return (
-         <section className="card panel">
-           <div className="panel__header">
-             <div>
-               <h2 className="panel__title">Almost there</h2>
-               <p className="panel__subtitle">Your account is connected</p>
-             </div>
-           </div>
-           <div className="panel__body">
-             <p className="modal__text">
-               Your sign-in works, but the attendance screens still use demo data
-               stored in this browser and have no record for you yet. They connect
-               to the live database in the next update.
-             </p>
-           </div>
-         </section>
-       );
-     }
+  if (!employee) {
+    return (
+      <section className="card panel">
+        <div className="panel__header">
+          <div>
+            <h2 className="panel__title">No employee record</h2>
+            <p className="panel__subtitle">Your account isn’t linked to an employee</p>
+          </div>
+        </div>
+        <div className="panel__body">
+          <p className="modal__text">
+            Ask your administrator to link your login to an employee record.
+          </p>
+        </div>
+      </section>
+    );
+  }
 
   // Only this employee's data
   const myRecords = attendanceRecords.filter((r) => r.employeeId === employeeId);
   const todayRecord = getTodayRecord(attendanceRecords, employeeId);
   const status = getStatus(attendanceRecords, employeeId);
   const actions = getActionState(attendanceRecords, employeeId);
-
   const latest = getLatestRecord(attendanceRecords, employeeId);
-  const missed = latest && isMissedTimeOut(latest) ? latest : null;
+  const missed = latest?.missed ? latest : null;
 
   let timer;
   if (!todayRecord) {
     timer = "0:00:00";
-  } else if (todayRecord.timeOut === null) {
-    timer = <LiveDuration since={todayRecord.timeIn} />;
+  } else if (todayRecord.open) {
+    timer = <LiveDuration since={todayRecord.timeIn} offsetMs={serverOffsetMs} />;
+  } else if (todayRecord.timeOut) {
+    timer = formatDuration(Date.parse(todayRecord.timeOut) - Date.parse(todayRecord.timeIn));
   } else {
-    timer = formatDuration(
-      new Date(todayRecord.timeOut) - new Date(todayRecord.timeIn)
-    );
+    timer = "—"; // a missed time-out has no end time
   }
 
   const hint =
@@ -82,7 +86,9 @@ function MyDashboardPage({ onNavigate }) {
       ? "You’re clocked in. Time out when your shift ends."
       : status === "Timed Out"
         ? "Your shift is complete for today. See you tomorrow."
-        : "You haven’t clocked in yet today.";
+        : status === "Missed time-out"
+          ? "Today’s shift wasn’t closed in time. Ask your administrator to correct it."
+          : "You haven’t clocked in yet today.";
 
   return (
     <>
@@ -92,8 +98,8 @@ function MyDashboardPage({ onNavigate }) {
         <div className="alert alert--warning" role="status">
           <AlertCircleIcon size={18} />
           <span>
-            You didn’t clock out on {formatDate(missed.timeIn)}. Ask your
-            administrator if that day needs correcting.
+            Your shift on {formatRecordDate(missed)} wasn’t closed in time and is marked
+            as a missed time-out. Ask your administrator to correct it.
           </span>
         </div>
       )}
@@ -113,14 +119,14 @@ function MyDashboardPage({ onNavigate }) {
               <Avatar name={employee.name} size="lg" />
               <div>
                 <p className="profile__name">{employee.name}</p>
-                <p className="profile__role">{employee.position ?? "—"}</p>
+                <p className="profile__role">{employee.position || "—"}</p>
               </div>
             </div>
             <dl className="profile__details">
               <div><dt>Employee ID</dt><dd className="cell-id">{employee.id}</dd></div>
               <div><dt>Email</dt><dd>{employee.email ?? "—"}</dd></div>
-              <div><dt>Department</dt><dd>{employee.department ?? "—"}</dd></div>
-              <div><dt>Position</dt><dd>{employee.position ?? "—"}</dd></div>
+              <div><dt>Branch</dt><dd>{employee.branchName}</dd></div>
+              <div><dt>Position</dt><dd>{employee.position || "—"}</dd></div>
             </dl>
           </div>
         </section>
@@ -148,16 +154,16 @@ function MyDashboardPage({ onNavigate }) {
               <ActionButton
                 kind="in"
                 size="lg"
-                enabled={actions.canTimeIn}
-                reason={actions.timeInReason}
-                onClick={() => handleTimeIn(employeeId)}
+                enabled={actions.canTimeIn && !busy}
+                reason={busy ? "Please wait…" : actions.timeInReason}
+                onClick={handleTimeIn}
               />
               <ActionButton
                 kind="out"
                 size="lg"
-                enabled={actions.canTimeOut}
-                reason={actions.timeOutReason}
-                onClick={() => handleTimeOut(employeeId)}
+                enabled={actions.canTimeOut && !busy}
+                reason={busy ? "Please wait…" : actions.timeOutReason}
+                onClick={handleTimeOut}
               />
             </div>
             <p className="today__hint">{hint}</p>

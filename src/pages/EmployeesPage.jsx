@@ -12,7 +12,7 @@ import { SearchIcon, PlusIcon, AlertCircleIcon } from "../components/Icons";
 function EmployeesPage({ records }) {
   const {
     employees,
-    accounts,
+    branches,
     addEmployee,
     updateEmployee,
     setEmployeeActive,
@@ -23,6 +23,7 @@ function EmployeesPage({ records }) {
   const [statusFilter, setStatusFilter] = useState("all");
   // null, { type: "add" }, { type: "edit", employee }, or { type: "deactivate", employee }
   const [modal, setModal] = useState(null);
+  const [working, setWorking] = useState(false);
 
   const query = searchTerm.trim().toLowerCase();
   const filtered = employees.filter((emp) => {
@@ -30,7 +31,7 @@ function EmployeesPage({ records }) {
     const matchesStatus =
       statusFilter === "all" ||
       (statusFilter === "active" ? isActive : !isActive);
-    const matchesSearch = [emp.name, emp.id, emp.email, emp.department, emp.position]
+    const matchesSearch = [emp.name, emp.id, emp.email, emp.branchName, emp.position]
       .filter(Boolean)
       .some((field) => field.toLowerCase().includes(query));
     return matchesStatus && matchesSearch;
@@ -47,11 +48,11 @@ function EmployeesPage({ records }) {
     setStatusFilter("all");
   }
 
-  function handleSave(values) {
+  async function handleSave(values) {
     const isAdd = modal.type === "add";
     const result = isAdd
-      ? addEmployee(values)
-      : updateEmployee(modal.employee.id, values);
+      ? await addEmployee(values)
+      : await updateEmployee(modal.employee.id, values);
 
     if (result.ok) {
       showToast(
@@ -65,15 +66,27 @@ function EmployeesPage({ records }) {
     return result;
   }
 
-  function handleDeactivate() {
-    setEmployeeActive(modal.employee.id, false);
-    showToast("success", `${modal.employee.name} was deactivated.`);
+  async function handleDeactivate() {
+    if (working) return;
+    setWorking(true);
+    const target = modal.employee;
+    const result = await setEmployeeActive(target.id, false);
+    setWorking(false);
+
+    if (!result.ok) {
+      showToast("error", result.error);
+      return;
+    }
+    showToast("success", `${target.name} was deactivated.`);
     setModal(null);
   }
 
-  function handleReactivate(emp) {
-    setEmployeeActive(emp.id, true);
-    showToast("success", `${emp.name} was reactivated.`);
+  async function handleReactivate(emp) {
+    const result = await setEmployeeActive(emp.id, true);
+    showToast(
+      result.ok ? "success" : "error",
+      result.ok ? `${emp.name} was reactivated.` : result.error
+    );
   }
 
   const modalTitle =
@@ -145,7 +158,7 @@ function EmployeesPage({ records }) {
                 <tr>
                   <th>Employee</th>
                   <th>ID</th>
-                  <th>Department</th>
+                  <th>Branch</th>
                   <th>Status</th>
                   <th>Today</th>
                   <th>Actions</th>
@@ -168,8 +181,8 @@ function EmployeesPage({ records }) {
                       <td className="cell-id">{emp.id}</td>
                       <td>
                         <div className="employee-cell__text">
-                          <span>{emp.department ?? "—"}</span>
-                          <span className="employee-cell__sub">{emp.position ?? "—"}</span>
+                          <span>{emp.branchName}</span>
+                          <span className="employee-cell__sub">{emp.position || "—"}</span>
                         </div>
                       </td>
                       <td>
@@ -229,10 +242,8 @@ function EmployeesPage({ records }) {
           <EmployeeForm
             mode={modal.type}
             employee={modal.employee}
-            emailLocked={
-              modal.type === "edit" &&
-              accounts.some((a) => a.employeeId === modal.employee.id)
-            }
+            emailLocked={modal.type === "edit" && modal.employee.hasLogin}
+            branches={branches}
             onSubmit={handleSave}
             onCancel={() => setModal(null)}
           />
@@ -252,7 +263,7 @@ function EmployeesPage({ records }) {
                   <AlertCircleIcon size={18} />
                   <span>
                     They’re clocked in right now. Their open shift stays open
-                    until they clock out.
+                    until it’s corrected.
                   </span>
                 </div>
               )}
@@ -262,11 +273,17 @@ function EmployeesPage({ records }) {
                 type="button"
                 className="btn-secondary"
                 onClick={() => setModal(null)}
+                disabled={working}
               >
                 Cancel
               </button>
-              <button type="button" className="btn-danger" onClick={handleDeactivate}>
-                Deactivate
+              <button
+                type="button"
+                className="btn-danger"
+                onClick={handleDeactivate}
+                disabled={working}
+              >
+                {working ? "Deactivating…" : "Deactivate"}
               </button>
             </div>
           </>

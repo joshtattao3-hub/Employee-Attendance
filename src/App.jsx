@@ -16,7 +16,7 @@ import MyAttendancePage from "./pages/MyAttendancePage";
 
 function AppShell() {
   const { currentUser } = useAuth();
-  const { attendanceRecords } = useData();
+  const { attendanceRecords, refreshFailed, reload } = useData();
 
   const navItems = getNavItems(currentUser.role);
   const [requestedPage, setActivePage] = useState(navItems[0].id);
@@ -64,12 +64,17 @@ function AppShell() {
         <Topbar title={title} onMenuClick={() => setSidebarOpen(true)} />
 
         <main id="main-content" tabIndex={-1} className="content">
-          <div className="alert alert--info" role="note">
-            <span>
-              Demo data: attendance on these screens is still stored in this
-              browser. It moves to the live database in the next update.
-            </span>
-          </div>
+          {refreshFailed && (
+            <div className="alert alert--warning" role="status">
+              <span>
+                We couldn’t refresh your data, so you’re seeing the last version
+                we loaded.{" "}
+                <button type="button" className="link-btn" onClick={reload}>
+                  Try again
+                </button>
+              </span>
+            </div>
+          )}
 
           {activePage === "dashboard" && (
             <DashboardPage records={attendanceRecords} onNavigate={navigate} />
@@ -90,6 +95,36 @@ function AppShell() {
       </div>
     </div>
   );
+}
+
+// Shows a loading or error screen until the attendance data is ready
+function DataGate({ children }) {
+  const { status, reload } = useData();
+  const { logout } = useAuth();
+
+  if (status === "loading") {
+    return <StatusScreen busy title="Loading attendance data…" />;
+  }
+
+  if (status === "error") {
+    return (
+      <StatusScreen
+        title="We couldn’t load your data"
+        text="Check your connection and try again."
+      >
+        <div className="status-screen__actions">
+          <button type="button" className="btn-primary" onClick={reload}>
+            Try again
+          </button>
+          <button type="button" className="btn-secondary" onClick={logout}>
+            Sign out
+          </button>
+        </div>
+      </StatusScreen>
+    );
+  }
+
+  return children;
 }
 
 function App() {
@@ -126,7 +161,11 @@ function App() {
 
   if (!currentUser) return <AuthPage />;
   if (currentUser.mustChangePassword) return <ChangePasswordPage />;
-  return <AppShell />;
+  return (
+    <DataGate>
+      <AppShell />
+    </DataGate>
+  );
 }
 
 export default App;

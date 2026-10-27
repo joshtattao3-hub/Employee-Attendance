@@ -7,24 +7,24 @@ import {
 } from "../utils/validation";
 import { AlertCircleIcon } from "./Icons";
 
-const DEPARTMENTS = ["Engineering", "Finance", "Human Resources", "Operations", "Sales"];
-const FIELD_ORDER = ["name", "email", "department", "position"];
+const FIELD_ORDER = ["name", "email", "branch", "position"];
 
-function EmployeeForm({ mode, employee, emailLocked, onSubmit, onCancel }) {
+function EmployeeForm({ mode, employee, emailLocked, branches, onSubmit, onCancel }) {
   const [values, setValues] = useState({
     name: employee?.name ?? "",
     email: employee?.email ?? "",
-    department: employee?.department ?? "",
+    branchId: employee?.branchId ?? (branches.length === 1 ? branches[0].id : ""),
     position: employee?.position ?? "",
   });
   const [errors, setErrors] = useState({});
   const [formError, setFormError] = useState("");
+  const [saving, setSaving] = useState(false);
 
-  function update(field) {
+  function update(field, errorKey = field) {
     return (e) => {
       const value = e.target.value;
       setValues((prev) => ({ ...prev, [field]: value }));
-      setErrors((prev) => ({ ...prev, [field]: "" }));
+      setErrors((prev) => ({ ...prev, [errorKey]: "" }));
     };
   }
 
@@ -32,14 +32,15 @@ function EmployeeForm({ mode, employee, emailLocked, onSubmit, onCancel }) {
     document.getElementById(`emp-${field}`)?.focus();
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
+    if (saving) return;
     setFormError("");
 
     const nextErrors = {
       name: validateName(values.name),
       email: validateEmail(values.email),
-      department: validateTextField(values.department, "Enter a department.", 40),
+      branch: values.branchId ? "" : "Choose a branch.",
       position: validateTextField(values.position, "Enter a position.", 50),
     };
     setErrors(nextErrors);
@@ -51,8 +52,10 @@ function EmployeeForm({ mode, employee, emailLocked, onSubmit, onCancel }) {
     }
 
     // On success the parent closes the dialog, so only handle failure
-    const result = onSubmit(values);
+    setSaving(true);
+    const result = await onSubmit(values);
     if (!result.ok) {
+      setSaving(false);
       if (result.field) {
         setErrors((prev) => ({ ...prev, [result.field]: result.error }));
         focusField(result.field);
@@ -88,6 +91,7 @@ function EmployeeForm({ mode, employee, emailLocked, onSubmit, onCancel }) {
           error={errors.name}
           autoComplete="off"
           maxLength={60}
+          disabled={saving}
           data-autofocus
         />
         <FormField
@@ -99,30 +103,42 @@ function EmployeeForm({ mode, employee, emailLocked, onSubmit, onCancel }) {
           error={errors.email}
           hint={
             emailLocked
-              ? "Tied to this employee’s login, so it can’t be changed in this demo."
-              : isAdd
-                ? "If this person signs up with this email, their account links to this record."
-                : undefined
+              ? "This employee has a login, so their email can’t be changed here."
+              : "Used to create their sign-in later."
           }
           readOnly={emailLocked}
           autoComplete="off"
           maxLength={254}
+          disabled={saving}
         />
-        <FormField
-          id="emp-department"
-          label="Department"
-          value={values.department}
-          onChange={update("department")}
-          error={errors.department}
-          list="department-options"
-          autoComplete="off"
-          maxLength={40}
-        />
-        <datalist id="department-options">
-          {DEPARTMENTS.map((d) => (
-            <option key={d} value={d} />
-          ))}
-        </datalist>
+
+        <div className="form-field">
+          <label htmlFor="emp-branch" className="form-field__label">
+            Branch
+          </label>
+          <select
+            id="emp-branch"
+            className={`form-field__input ${errors.branch ? "form-field__input--error" : ""}`}
+            value={values.branchId}
+            onChange={update("branchId", "branch")}
+            aria-invalid={errors.branch ? true : undefined}
+            aria-describedby={errors.branch ? "emp-branch-error" : undefined}
+            disabled={saving}
+          >
+            <option value="">Choose a branch</option>
+            {branches.map((branch) => (
+              <option key={branch.id} value={branch.id}>
+                {branch.name}
+              </option>
+            ))}
+          </select>
+          {errors.branch && (
+            <p id="emp-branch-error" className="form-field__error" role="alert">
+              {errors.branch}
+            </p>
+          )}
+        </div>
+
         <FormField
           id="emp-position"
           label="Position"
@@ -131,15 +147,16 @@ function EmployeeForm({ mode, employee, emailLocked, onSubmit, onCancel }) {
           error={errors.position}
           autoComplete="off"
           maxLength={50}
+          disabled={saving}
         />
       </div>
 
       <div className="modal__footer">
-        <button type="button" className="btn-secondary" onClick={onCancel}>
+        <button type="button" className="btn-secondary" onClick={onCancel} disabled={saving}>
           Cancel
         </button>
-        <button type="submit" className="btn-primary">
-          {isAdd ? "Add employee" : "Save changes"}
+        <button type="submit" className="btn-primary" disabled={saving}>
+          {saving ? "Saving…" : isAdd ? "Add employee" : "Save changes"}
         </button>
       </div>
     </form>

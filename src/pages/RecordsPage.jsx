@@ -5,10 +5,16 @@ import { getRecordStatus, getDateKey } from "../utils/attendance";
 import { recordsToCsv, downloadCsv } from "../utils/csv";
 import SearchBar from "../components/SearchBar";
 import RecordsTable from "../components/RecordsTable";
-import { RecordsIcon, SearchIcon, DownloadIcon } from "../components/Icons";
+import { RecordsIcon, SearchIcon, DownloadIcon, AlertCircleIcon } from "../components/Icons";
+
+const RANGES = [
+  { days: 7, label: "Last 7 days" },
+  { days: 31, label: "Last 31 days" },
+  { days: 90, label: "Last 90 days" },
+];
 
 function RecordsPage({ records }) {
-  const { employees } = useData();
+  const { employees, rangeDays, setRangeDays, truncated } = useData();
   const { showToast } = useToast();
 
   const [searchTerm, setSearchTerm] = useState("");
@@ -28,7 +34,7 @@ function RecordsPage({ records }) {
       record.employeeId.toLowerCase().includes(query);
     const matchesEmployee = employeeId === "all" || record.employeeId === employeeId;
     const matchesStatus = status === "all" || getRecordStatus(record) === status;
-    const matchesDate = !date || getDateKey(record.timeIn) === date;
+    const matchesDate = !date || record.workDate === date;
 
     return matchesSearch && matchesEmployee && matchesStatus && matchesDate;
   });
@@ -37,9 +43,7 @@ function RecordsPage({ records }) {
     query !== "" || employeeId !== "all" || status !== "all" || date !== "";
 
   // Everyone, including deactivated employees, because their history is kept
-  const employeeOptions = [...employees].sort((a, b) =>
-    a.name.localeCompare(b.name)
-  );
+  const employeeOptions = [...employees].sort((a, b) => a.name.localeCompare(b.name));
 
   function clearFilters() {
     setSearchTerm("");
@@ -83,6 +87,21 @@ function RecordsPage({ records }) {
 
       <div className="toolbar">
         <SearchBar value={searchTerm} onChange={setSearchTerm} />
+
+        <label className="field">
+          <span className="field__label">Period</span>
+          <select
+            className="field__control"
+            value={rangeDays}
+            onChange={(e) => setRangeDays(Number(e.target.value))}
+          >
+            {RANGES.map((range) => (
+              <option key={range.days} value={range.days}>
+                {range.label}
+              </option>
+            ))}
+          </select>
+        </label>
 
         <label className="field">
           <span className="field__label">Employee</span>
@@ -131,12 +150,22 @@ function RecordsPage({ records }) {
         )}
       </div>
 
+      {truncated && (
+        <div className="alert alert--warning panel__alert" role="status">
+          <AlertCircleIcon size={18} />
+          <span>
+            There are more records than can be shown for this period. Choose a
+            shorter period to see all of them.
+          </span>
+        </div>
+      )}
+
       {records.length === 0 ? (
         <div className="empty-state">
           <span className="empty-state__icon">
             <RecordsIcon size={22} />
           </span>
-          <h3 className="empty-state__title">No attendance records yet</h3>
+          <h3 className="empty-state__title">No attendance records in this period</h3>
           <p className="empty-state__text">
             Records appear here as soon as an employee clocks in.
           </p>
