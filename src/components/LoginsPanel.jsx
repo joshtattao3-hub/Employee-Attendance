@@ -4,6 +4,7 @@ import Avatar from "./Avatar";
 import StatusBadge from "./StatusBadge";
 import Modal from "./Modal";
 import { AlertCircleIcon } from "./Icons";
+import { useToast } from "../hooks/useToast";
 
 // Ask the server function to create a login or reset a password.
 // Returns { ok: true, data } or { ok: false, error }.
@@ -36,6 +37,7 @@ function roleLabel(role) {
 // Admin-only: lists the employees in the database and lets the admin give
 // them a sign-in or reset a forgotten password.
 function LoginsPanel() {
+  const { showToast } = useToast();
   const [state, setState] = useState({ status: "loading", rows: [] });
   const [reloadKey, setReloadKey] = useState(0);
   // null | { type: "create" | "reset", row } | { type: "result", ... }
@@ -120,6 +122,39 @@ function LoginsPanel() {
     setReloadKey((key) => key + 1);
   }
 
+    async function runRoleChange() {
+    if (!dialog || busy) return;
+    const { row } = dialog;
+    const nextRole = row.profile.role === "manager" ? "employee" : "manager";
+
+    setBusy(true);
+    setDialogError("");
+    const { data, error } = await supabase
+      .from("profiles")
+      .update({ role: nextRole })
+      .eq("id", row.profile.id)
+      .in("role", ["employee", "manager"])
+      .select("id");
+    setBusy(false);
+
+    if (error) {
+      setDialogError(
+        error.code === "42501"
+          ? "You don’t have permission to do that."
+          : "We couldn’t save that. Check your connection and try again."
+      );
+      return;
+    }
+    if (!data || data.length === 0) {
+      setDialogError("That login couldn’t be changed. Reload the page and try again.");
+      return;
+    }
+
+    showToast("success", `${row.full_name} is now a ${nextRole}.`);
+    closeDialog();
+    setReloadKey((key) => key + 1);
+  }
+
   async function copyPassword(text) {
     try {
       await navigator.clipboard.writeText(text);
@@ -135,11 +170,13 @@ function LoginsPanel() {
       ? "Create login"
       : dialog?.type === "reset"
         ? "Reset password"
-        : dialog?.type === "result"
-          ? dialog.kind === "create"
-            ? "Login created"
-            : "Password reset"
-          : "";
+        : dialog?.type === "role"
+          ? "Change role"
+          : dialog?.type === "result"
+            ? dialog.kind === "create"
+              ? "Login created"
+              : "Password reset"
+            : "";
 
   return (
     <>
@@ -209,20 +246,33 @@ function LoginsPanel() {
                       <StatusBadge status={loginStatus(row.profile)} />
                     </td>
                     <td>{roleLabel(row.profile?.role)}</td>
-                    <td>
+                                        <td>
                       <div className="row-actions">
                         {!row.active ? (
                           <span className="cell-muted">Deactivated</span>
                         ) : row.profile ? (
-                          <button
-                            type="button"
-                            className="btn-secondary btn-sm"
-                            onClick={() => openDialog("reset", row)}
-                            disabled={busy}
-                            aria-label={`Reset password for ${row.full_name}`}
-                          >
-                            Reset password
-                          </button>
+                          <>
+                            <button
+                              type="button"
+                              className="btn-secondary btn-sm"
+                              onClick={() => openDialog("reset", row)}
+                              disabled={busy}
+                              aria-label={`Reset password for ${row.full_name}`}
+                            >
+                              Reset password
+                            </button>
+                            {row.profile.active && row.profile.role !== "admin" && (
+                              <button
+                                type="button"
+                                className="btn-secondary btn-sm"
+                                onClick={() => openDialog("role", row)}
+                                disabled={busy}
+                                aria-label={`Change role for ${row.full_name}`}
+                              >
+                                {row.profile.role === "manager" ? "Make employee" : "Make manager"}
+                              </button>
+                            )}
+                          </>
                         ) : (
                           <button
                             type="button"
@@ -316,6 +366,55 @@ function LoginsPanel() {
                 data-autofocus
               >
                 {busy ? "Resetting…" : "Reset password"}
+              </button>
+            </div>
+          </>
+        )}
+
+        {dialog?.type === "role" && (
+          <>
+            <div className="modal__body">
+              <p className="modal__text">
+                {dialog.row.profile.role === "manager" ? (
+                  <>
+                    Make <strong>{dialog.row.full_name}</strong> a regular employee?
+                    They’ll lose the team screens.
+                  </>
+                ) : (
+                  <>
+                    Make <strong>{dialog.row.full_name}</strong> a manager? They’ll be
+                    able to view attendance and employees for{" "}
+                    {dialog.row.branch?.name ?? "their branch"} (read-only).
+                  </>
+                )}
+              </p>
+              <p className="modal__text">
+                The change applies straight away. Their menu updates the next time
+                they sign in or reload the page.
+              </p>
+              {dialogError && (
+                <div className="alert alert--error modal__alert" role="alert">
+                  <AlertCircleIcon size={18} />
+                  <span>{dialogError}</span>
+                </div>
+              )}
+            </div>
+            <div className="modal__footer">
+              <button type="button" className="btn-secondary" onClick={closeDialog}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={runRoleChange}
+                disabled={busy}
+                data-autofocus
+              >
+                {busy
+                  ? "Saving…"
+                  : dialog.row.profile.role === "manager"
+                    ? "Make employee"
+                    : "Make manager"}
               </button>
             </div>
           </>
