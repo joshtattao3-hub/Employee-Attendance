@@ -156,3 +156,11 @@ export const DownloadIcon = (props) => (
     <path d="M5 19h14" />
   </Icon>
 );
+
+export const BranchIcon = (props) => (
+  <Icon {...props}>
+    <path d="M3.5 9.5L5 4h14l1.5 5.5z" />
+    <path d="M5 9.5V20h14V9.5" />
+    <path d="M10 20v-5h4v5" />
+  </Icon>
+);

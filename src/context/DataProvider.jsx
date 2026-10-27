@@ -41,7 +41,7 @@ async function loadEverything(rangeDays) {
       .from("employees")
       .select("id, employee_code, full_name, email, branch_id, job_title, active, profile:profiles(id)")
       .order("employee_code"),
-    supabase.from("branches").select("id, name, timezone, active").order("name"),
+    supabase.from("branches").select("id, name, address, timezone, active").order("name"),
     supabase.from("company_settings").select("max_shift_hours").eq("id", 1).maybeSingle(),
     supabase.rpc("server_time"),
     fetchAttendance(since),
@@ -101,6 +101,19 @@ function employeeError(error) {
   }
   if (error.code === "23505") {
     return { ok: false, field: "email", error: "Another employee already uses this email." };
+  }
+  if (error.code === "42501") {
+    return { ok: false, error: "You don’t have permission to do that." };
+  }
+  return { ok: false, error: "We couldn’t save that. Check your connection and try again." };
+}
+
+function branchError(error) {
+  if (error.code === "23505") {
+    return { ok: false, field: "name", error: "Another branch already uses this name." };
+  }
+  if (error.code === "22023") {
+    return { ok: false, field: "timezone", error: "That time zone isn’t recognized." };
   }
   if (error.code === "42501") {
     return { ok: false, error: "You don’t have permission to do that." };
@@ -265,6 +278,30 @@ export function DataProvider({ children }) {
     [employees]
   );
 
+    // ---- administrators: manage branches ----
+  const addBranch = useCallback(async ({ name, address, timezone }) => {
+    const { data: row, error } = await supabase
+      .from("branches")
+      .insert({ name: clean(name), address: clean(address) || null, timezone })
+      .select("name")
+      .single();
+    if (error) return branchError(error);
+
+    setReloadKey((key) => key + 1);
+    return { ok: true, branch: { name: row.name } };
+  }, []);
+
+  const updateBranch = useCallback(async (id, { name, address, timezone }) => {
+    const { error } = await supabase
+      .from("branches")
+      .update({ name: clean(name), address: clean(address) || null, timezone })
+      .eq("id", id);
+    if (error) return branchError(error);
+
+    setReloadKey((key) => key + 1);
+    return { ok: true, branch: { name: clean(name) } };
+  }, []);
+
   const value = useMemo(
     () => ({
       status,
@@ -283,10 +320,13 @@ export function DataProvider({ children }) {
       addEmployee,
       updateEmployee,
       setEmployeeActive,
+      addBranch,
+      updateBranch,
     }),
     [
       status, refreshFailed, data, rangeDays, busy, reload,
       handleTimeIn, handleTimeOut, addEmployee, updateEmployee, setEmployeeActive,
+      addBranch, updateBranch,
     ]
   );
 

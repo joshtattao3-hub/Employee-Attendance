@@ -13,6 +13,7 @@ import RecordsPage from "./pages/RecordsPage";
 import SettingsPage from "./pages/SettingsPage";
 import MyDashboardPage from "./pages/MyDashboardPage";
 import MyAttendancePage from "./pages/MyAttendancePage";
+import BranchesPage from "./pages/BranchesPage";
 
 function AppShell() {
   const { currentUser } = useAuth();
@@ -81,6 +82,9 @@ function AppShell() {
           )}
           {activePage === "employees" && (
             <EmployeesPage records={attendanceRecords} />
+          )}
+          {activePage === "branches" && (
+            <BranchesPage />
           )}
           {activePage === "records" && (
             <RecordsPage records={attendanceRecords} />

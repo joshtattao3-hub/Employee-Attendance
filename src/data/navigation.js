@@ -3,6 +3,7 @@ import {
   UsersIcon,
   RecordsIcon,
   SettingsIcon,
+  BranchIcon
 } from "../components/Icons";
 
 const ADMIN_NAV = [
@@ -10,6 +11,7 @@ const ADMIN_NAV = [
   { id: "employees", label: "Employees", icon: UsersIcon },
   { id: "records", label: "Attendance Records", icon: RecordsIcon },
   { id: "settings", label: "Settings", icon: SettingsIcon },
+  { id: "branches", label: "Branches", icon: BranchIcon },
 ];
 
 const EMPLOYEE_NAV = [
