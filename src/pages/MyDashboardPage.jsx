@@ -16,6 +16,8 @@ import StatusBadge from "../components/StatusBadge";
 import ActionButton from "../components/ActionButton";
 import RecordsTable from "../components/RecordsTable";
 import { RecordsIcon, AlertCircleIcon } from "../components/Icons";
+import { useMySchedule } from "../hooks/useMySchedule";
+import { formatClock } from "../utils/shifts";
 
 // Ticks every second, but only this tiny component re-renders.
 // It counts against the DATABASE clock, so a wrong phone clock can't skew it.
@@ -44,6 +46,7 @@ function MyDashboardPage({ onNavigate }) {
 
   const employeeId = currentUser.employeeId;
   const employee = employees.find((e) => e.id === employeeId);
+  const { todayShift, timeZone, shiftName } = useMySchedule();
   if (!employee) {
     return (
       <section className="card panel">
@@ -148,6 +151,17 @@ function MyDashboardPage({ onNavigate }) {
             <dl className="today__times">
               <div><dt>Time in</dt><dd>{formatTime(todayRecord?.timeIn)}</dd></div>
               <div><dt>Time out</dt><dd>{formatTime(todayRecord?.timeOut)}</dd></div>
+            </dl>
+
+            <dl className="today__times">
+              <div>
+                <dt>Scheduled shift</dt>
+                <dd>
+                  {todayShift
+                    ? `${shiftName(todayShift)} · ${formatClock(todayShift.startAt, timeZone)} – ${formatClock(todayShift.endAt, timeZone)}`
+                    : "No shift scheduled"}
+                </dd>
+              </div>
             </dl>
 
             <div className="today__actions">

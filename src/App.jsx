@@ -14,6 +14,9 @@ import SettingsPage from "./pages/SettingsPage";
 import MyDashboardPage from "./pages/MyDashboardPage";
 import MyAttendancePage from "./pages/MyAttendancePage";
 import BranchesPage from "./pages/BranchesPage";
+import ShiftTemplatesPage from "./pages/ShiftTemplatesPage";
+import SchedulePage from "./pages/SchedulePage";
+import MySchedulePage from "./pages/MySchedulePage";
 
 function AppShell() {
   const { currentUser } = useAuth();
@@ -89,6 +92,9 @@ function AppShell() {
           {activePage === "branches" && (
             <BranchesPage />
           )}
+          {activePage === "shifts" && (
+            <ShiftTemplatesPage readOnly={currentUser.role !== "admin"} />
+          )}
           {activePage === "records" && (
             <RecordsPage records={attendanceRecords} />
           )}
@@ -98,6 +104,8 @@ function AppShell() {
             <MyDashboardPage onNavigate={navigate} />
           )}
           {activePage === "my-attendance" && <MyAttendancePage />}
+          {activePage === "schedule" && <SchedulePage />}
+          {activePage === "my-schedule" && <MySchedulePage />}
         </main>
       </div>
     </div>

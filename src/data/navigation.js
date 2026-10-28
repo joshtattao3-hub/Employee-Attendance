@@ -14,19 +14,25 @@ const ADMIN_NAV = [
   { id: "records", label: "Attendance Records", icon: RecordsIcon },
   { id: "settings", label: "Settings", icon: SettingsIcon },
   { id: "branches", label: "Branches", icon: BranchIcon },
+  { id: "shifts", label: "Shift Templates", icon: ClockIcon },
+  { id: "schedule", label: "Schedule", icon: CalendarIcon },
 ];
 
 const EMPLOYEE_NAV = [
   { id: "my-dashboard", label: "My Dashboard", icon: DashboardIcon },
   { id: "my-attendance", label: "My Attendance", icon: RecordsIcon },
+  { id: "my-schedule", label: "My Schedule", icon: CalendarIcon },
 ];
 
 const MANAGER_NAV = [
   { id: "my-dashboard", label: "My Dashboard", icon: ClockIcon },
   { id: "my-attendance", label: "My Attendance", icon: CalendarIcon },
+  { id: "my-schedule", label: "My Schedule", icon: CalendarIcon },
   { id: "dashboard", label: "Team Dashboard", icon: DashboardIcon },
   { id: "records", label: "Team Attendance", icon: RecordsIcon },
   { id: "employees", label: "Team", icon: UsersIcon },
+  { id: "shifts", label: "Shift Templates", icon: ClockIcon },
+  { id: "schedule", label: "Team Schedule", icon: CalendarIcon },
 ];
 
 export function getNavItems(role) {

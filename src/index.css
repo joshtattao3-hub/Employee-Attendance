@@ -1950,3 +1950,26 @@ button:disabled {
     width: 100%;
   }
 }
+
+.schedule-grid th,
+.schedule-grid td {
+  min-width: 9.5rem;
+}
+.schedule-grid th:first-child,
+.schedule-grid td:first-child {
+  min-width: 13rem;
+}
+.schedule-grid .field__control {
+  width: 100%;
+}
+.schedule-day--today {
+  font-weight: 700;
+  box-shadow: inset 0 -3px 0 currentColor;
+  background: rgba(0, 0, 0, 0.4);
+}
+.schedule-cell__time {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  opacity: 0.75;
+}
