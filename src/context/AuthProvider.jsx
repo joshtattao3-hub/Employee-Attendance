@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AuthContext } from "./authContext";
+import ConfirmLogoutDialog from "../components/ConfirmLogoutDialog";
 import { useToast } from "../hooks/useToast";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
 
@@ -130,11 +131,36 @@ export function AuthProvider({ children }) {
     return { ok: true };
   }, []);
 
-  const logout = useCallback(async () => {
+    // The real sign-out. Only the confirmation dialog calls this.
+  const performLogout = useCallback(async () => {
     if (!supabase) return;
     await supabase.auth.signOut();
     showToast("success", "You have been signed out.");
   }, [showToast]);
+
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+  const signingOutRef = useRef(false); // blocks double-clicks within the same render
+
+  // What every "Log Out" / "Sign out" button calls: just opens the dialog.
+  const logout = useCallback(() => setConfirmOpen(true), []);
+
+  const cancelLogout = useCallback(() => {
+    if (!signingOutRef.current) setConfirmOpen(false);
+  }, []);
+
+  const confirmLogout = useCallback(async () => {
+    if (signingOutRef.current) return;
+    signingOutRef.current = true;
+    setSigningOut(true);
+    try {
+      await performLogout();
+    } finally {
+      signingOutRef.current = false;
+      setSigningOut(false);
+      setConfirmOpen(false);
+    }
+  }, [performLogout]);
 
   // Used on the forced "choose a new password" screen.
   const changePassword = useCallback(async (newPassword) => {
@@ -175,5 +201,15 @@ export function AuthProvider({ children }) {
     [currentUser, loading, loadFailed, notice, login, logout, changePassword, reload]
   );
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+      <ConfirmLogoutDialog
+        open={confirmOpen}
+        busy={signingOut}
+        onConfirm={confirmLogout}
+        onCancel={cancelLogout}
+      />
+    </AuthContext.Provider>
+  );
 }

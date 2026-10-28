@@ -3,7 +3,7 @@ import { CloseIcon } from "./Icons";
 
 // Wraps the native <dialog>: focus trap, Escape to close, and focus
 // restore come built in. Content mounts only while open, so forms reset.
-function Modal({ open, title, onClose, children }) {
+function Modal({ open, title, onClose, dismissible = true, children }) {
   const dialogRef = useRef(null);
   const titleId = useId();
 
@@ -22,10 +22,21 @@ function Modal({ open, title, onClose, children }) {
       ref={dialogRef}
       className="modal"
       aria-labelledby={titleId}
-      onClose={onClose}
+      onCancel={(e) => {
+        // Escape key: block it while busy
+        if (!dismissible) e.preventDefault();
+      }}
+      onClose={() => {
+        // Safety net: if the browser closed it anyway while busy, reopen it
+        if (open && !dismissible) {
+          dialogRef.current?.showModal();
+          return;
+        }
+        onClose();
+      }}
       onClick={(e) => {
         // A click on the dark backdrop targets the dialog element itself
-        if (e.target === dialogRef.current) onClose();
+        if (dismissible && e.target === dialogRef.current) onClose();
       }}
     >
       {open && (
@@ -34,6 +45,7 @@ function Modal({ open, title, onClose, children }) {
             <h2 id={titleId} className="modal__title">
               {title}
             </h2>
+            {dismissible && (
             <button
               type="button"
               className="icon-btn"
@@ -42,6 +54,7 @@ function Modal({ open, title, onClose, children }) {
             >
               <CloseIcon size={18} />
             </button>
+            )}
           </div>
           {children}
         </div>
