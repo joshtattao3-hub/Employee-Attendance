@@ -1,4 +1,4 @@
-import { ClockIcon, CheckCircleIcon } from "./Icons";
+import { ClockIcon } from "./Icons";
 
 function AuthLayout({ children }) {
   return (
@@ -12,15 +12,9 @@ function AuthLayout({ children }) {
         </div>
 
         <div className="auth__hero">
-          <h2 className="auth__headline">Every shift, accounted for.</h2>
-          <p className="auth__lead">
-            Clock in, clock out, and see your whole team’s day at a glance.
-          </p>
-          <ul className="auth__points">
-            <li><CheckCircleIcon size={18} /> One-tap clock in and clock out</li>
-            <li><CheckCircleIcon size={18} /> Live attendance summaries for HR</li>
-            <li><CheckCircleIcon size={18} /> Export records to CSV</li>
-          </ul>
+          <h2 className="auth__headline">
+            Presence <span className="auth__accent">powers</span> performance.
+          </h2>
         </div>
       </aside>
 

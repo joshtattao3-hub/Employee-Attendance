@@ -2,9 +2,19 @@ import { useState } from "react";
 import { EyeIcon, EyeOffIcon } from "./Icons";
 
 // Label + input + error/hint. Password fields get a show/hide toggle.
-function FormField({ id, label, type = "text", error, hint, ...inputProps }) {
+function FormField({ id, label, type = "text", error, hint, onChange, ...inputProps }) {
   const [visible, setVisible] = useState(false);
   const isPassword = type === "password";
+
+  // The show/hide button only appears once something has been typed
+  const hasValue = String(inputProps.value ?? "").length > 0;
+  const showToggle = isPassword && hasValue;
+
+  // When the box is emptied, go back to hidden so the next password starts hidden
+  function handleChange(e) {
+    if (!e.target.value) setVisible(false);
+    onChange?.(e);
+  }
 
   const messageId = error ? `${id}-error` : hint ? `${id}-hint` : undefined;
 
@@ -25,13 +35,14 @@ function FormField({ id, label, type = "text", error, hint, ...inputProps }) {
       <div className="form-field__control">
         <input
           id={id}
-          type={isPassword && visible ? "text" : type}
+          type={isPassword && visible && hasValue ? "text" : type}
           className={inputClass}
           aria-invalid={error ? true : undefined}
           aria-describedby={messageId}
           {...inputProps}
+          onChange={handleChange}
         />
-        {isPassword && (
+        {showToggle && (
           <button
             type="button"
             className="icon-btn form-field__toggle"
