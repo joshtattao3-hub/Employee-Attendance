@@ -1,6 +1,6 @@
 -- =====================================================================
 -- Hirara attendance: Stage 1, security and rules tests
--- Run AFTER 01, 02 and 03, with the 4 test logins in place.
+-- Run AFTER 01 to 03, 05 and 06, with the 4 test logins in place.
 --
 -- It acts as each test user (admin, manager, two employees, and a
 -- signed-out visitor), tries things they should and should not be able
@@ -485,6 +485,257 @@ begin
 end
 $fn$;
 
+
+-- ---------- 8. Stage 2: admin-created logins ----------
+create or replace function pg_temp.run_stage2(
+  p_admin text, p_manager text, p_employee text, p_other_employee text
+) returns void
+language plpgsql as $fn$
+declare
+  v_emp_flag boolean; v_other_flag boolean;
+begin
+  perform set_config('role', 'none', true);
+
+  perform pg_temp.t('stage 2', 'profiles has a must_change_password flag',
+    exists (select 1 from information_schema.columns
+            where table_schema = 'public' and table_name = 'profiles'
+              and column_name = 'must_change_password'));
+  perform pg_temp.t('stage 2', 'signed-out visitors cannot call finish_password_change',
+    not has_function_privilege('anon', 'public.finish_password_change()', 'execute'));
+  perform pg_temp.t('stage 2', 'signed-in users can call finish_password_change',
+    has_function_privilege('authenticated', 'public.finish_password_change()', 'execute'));
+  perform pg_temp.t('stage 2', 'finish_password_change runs with a locked search path',
+    exists (select 1
+            from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+            where n.nspname = 'public' and p.proname = 'finish_password_change'
+              and p.prosecdef
+              and exists (select 1 from unnest(p.proconfig) c where c like 'search_path=%')));
+
+  -- The server functions use the service_role key. It must be able to do its job.
+  perform pg_temp.t('stage 2', 'the server role can read profiles and employees',
+    has_table_privilege('service_role', 'public.profiles', 'select')
+    and has_table_privilege('service_role', 'public.employees', 'select'));
+  perform pg_temp.t('stage 2', 'the server role can update profiles and write the audit log',
+    has_table_privilege('service_role', 'public.profiles', 'update')
+    and has_table_privilege('service_role', 'public.audit_log', 'insert'));
+
+  -- Nobody can clear the flag with a plain update, not even an admin.
+  perform pg_temp.act_as(p_employee);
+  perform pg_temp.t('stage 2', 'an employee cannot clear the flag with an update',
+    pg_temp.blocked($q$ update public.profiles set must_change_password = false where id = auth.uid() $q$));
+  perform pg_temp.act_as(p_manager);
+  perform pg_temp.t('stage 2', 'a manager cannot clear the flag with an update',
+    pg_temp.blocked($q$ update public.profiles set must_change_password = false where id = auth.uid() $q$));
+  perform pg_temp.act_as(p_admin);
+  perform pg_temp.t('stage 2', 'an admin cannot edit the flag from the app (only the server function does)',
+    pg_temp.blocked($q$ update public.profiles set must_change_password = false $q$));
+
+  -- finish_password_change clears only the caller's own flag.
+  begin
+    perform set_config('role', 'none', true);
+    update public.profiles set must_change_password = true
+      where email in (p_employee, p_other_employee);
+    perform pg_temp.act_as(p_employee);
+    perform public.finish_password_change();
+    perform set_config('role', 'none', true);
+    select must_change_password into v_emp_flag   from public.profiles where email = p_employee;
+    select must_change_password into v_other_flag from public.profiles where email = p_other_employee;
+    raise exception 'rollback_marker';
+  exception when others then
+    if sqlerrm <> 'rollback_marker' then raise; end if;
+  end;
+
+  perform set_config('role', 'none', true);
+  perform pg_temp.t('stage 2', 'finish_password_change clears the caller''s own flag', v_emp_flag = false);
+  perform pg_temp.t('stage 2', 'finish_password_change leaves other people''s flags alone', v_other_flag = true);
+
+  perform set_config('request.jwt.claim.sub', '', true);
+  perform set_config('request.jwt.claims', '', true);
+end
+$fn$;
+
+
+-- ---------- 9. Stage 3: clock in / clock out run on the server ----------
+-- Runs a statement and returns its error message ('ok' if it worked).
+create or replace function pg_temp.msg(p_sql text) returns text
+language plpgsql as $fn$
+begin
+  execute p_sql;
+  return 'ok';
+exception when others then
+  return sqlerrm;
+end
+$fn$;
+
+create or replace function pg_temp.run_stage3(
+  p_admin text, p_manager text, p_employee text, p_other_employee text
+) returns void
+language plpgsql as $fn$
+declare
+  v_emp uuid; v_branch uuid; v_uid uuid; v_other_branch uuid;
+  r_in public.attendance; r_out public.attendance;
+  e_dup text; e_out2 text; e_again text; n_audit bigint;
+  e_john text; e_admin_in text; e_admin_out text; r_mgr public.attendance;
+  e_stale_out text; r_new public.attendance; stale_closed boolean; stale_flagged boolean;
+  e_inactive text;
+  r_k public.attendance; r_p public.attendance; tz_k date; tz_p date;
+  e_locked text; e_free text; st_diff double precision;
+begin
+  perform set_config('role', 'none', true);
+  select id, branch_id into v_emp, v_branch from public.employees where email = p_employee;
+  select id into v_uid from auth.users where email = p_employee;
+
+  -- Static checks
+  perform pg_temp.t('stage 3', 'clock_in and clock_out take no inputs (nobody can act for someone else)',
+    (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+     where n.nspname = 'public' and p.proname in ('clock_in', 'clock_out') and p.pronargs = 0) = 2);
+  perform pg_temp.t('stage 3', 'clock functions are definers with a locked search path',
+    (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+     where n.nspname = 'public' and p.proname in ('clock_in', 'clock_out') and p.prosecdef
+       and exists (select 1 from unnest(p.proconfig) c where c like 'search_path=%')) = 2);
+  perform pg_temp.t('stage 3', 'signed-out visitors cannot clock in, clock out, or read server time',
+    not has_function_privilege('anon', 'public.clock_in()', 'execute')
+    and not has_function_privilege('anon', 'public.clock_out()', 'execute')
+    and not has_function_privilege('anon', 'public.server_time()', 'execute'));
+  perform pg_temp.t('stage 3', 'signed-in users can call the clock functions and server_time',
+    has_function_privilege('authenticated', 'public.clock_in()', 'execute')
+    and has_function_privilege('authenticated', 'public.clock_out()', 'execute')
+    and has_function_privilege('authenticated', 'public.server_time()', 'execute'));
+
+  -- A. The normal flow for one employee
+  begin
+    perform pg_temp.act_as(p_employee);
+    select * into r_in from public.clock_in();
+    e_dup := pg_temp.msg('select public.clock_in()');
+    select * into r_out from public.clock_out();
+    e_out2 := pg_temp.msg('select public.clock_out()');
+    e_again := pg_temp.msg('select public.clock_in()');
+    perform set_config('role', 'none', true);
+    select count(*) into n_audit from public.audit_log
+      where table_name = 'attendance' and action = 'INSERT'
+        and actor_id = v_uid and record_id = r_in.id::text;
+    raise exception 'rollback_marker';
+  exception when others then
+    if sqlerrm <> 'rollback_marker' then raise; end if;
+  end;
+  perform set_config('role', 'none', true);
+  perform pg_temp.t('stage 3', 'clock_in records the signed-in employee at their branch',
+    r_in.employee_id = v_emp and r_in.branch_id = v_branch and r_in.clock_out is null and r_in.source = 'self');
+  perform pg_temp.t('stage 3', 'the clock-in time comes from the database clock',
+    abs(extract(epoch from (r_in.clock_in - clock_timestamp()))) < 5);
+  perform pg_temp.t('stage 3', 'a second clock-in is refused while a shift is open', e_dup = 'already_clocked_in');
+  perform pg_temp.t('stage 3', 'clock_out closes the same shift after the clock-in',
+    r_out.id = r_in.id and r_out.clock_out > r_out.clock_in);
+  perform pg_temp.t('stage 3', 'a second clock-out is refused', e_out2 = 'not_clocked_in');
+  perform pg_temp.t('stage 3', 'clocking in again after finishing is refused (one shift per day)',
+    e_again = 'already_completed_today');
+  perform pg_temp.t('stage 3', 'clock-in is written to the audit log with the employee as actor', n_audit = 1);
+
+  -- B. Other people
+  begin
+    perform pg_temp.act_as(p_other_employee);
+    e_john := pg_temp.msg('select public.clock_out()');
+    perform pg_temp.act_as(p_admin);
+    e_admin_in  := pg_temp.msg('select public.clock_in()');
+    e_admin_out := pg_temp.msg('select public.clock_out()');
+    perform pg_temp.act_as(p_manager);
+    select * into r_mgr from public.clock_in();
+    raise exception 'rollback_marker';
+  exception when others then
+    if sqlerrm <> 'rollback_marker' then raise; end if;
+  end;
+  perform set_config('role', 'none', true);
+  perform pg_temp.t('stage 3', 'clocking out without a shift is refused', e_john = 'not_clocked_in');
+  perform pg_temp.t('stage 3', 'an admin (no employee record) cannot clock in or out',
+    e_admin_in = 'no_employee' and e_admin_out = 'no_employee');
+  perform pg_temp.t('stage 3', 'a manager can clock in, for themselves only',
+    r_mgr.employee_id = (select id from public.employees where email = p_manager));
+
+  -- C. A shift open for 30 hours is a missed time-out
+  begin
+    delete from public.attendance where employee_id = v_emp;
+    insert into public.attendance (employee_id, branch_id, work_date, clock_in)
+    select v_emp, v_branch,
+           ((clock_timestamp() - interval '30 hours') at time zone b.timezone)::date,
+           clock_timestamp() - interval '30 hours'
+    from public.branches b where b.id = v_branch;
+    perform pg_temp.act_as(p_employee);
+    e_stale_out := pg_temp.msg('select public.clock_out()');
+    perform set_config('role', 'none', true);
+    select (clock_out is not null) into stale_closed from public.attendance
+      where employee_id = v_emp and clock_in < clock_timestamp() - interval '29 hours';
+    perform pg_temp.act_as(p_employee);
+    select * into r_new from public.clock_in();
+    perform set_config('role', 'none', true);
+    select missed_timeout into stale_flagged from public.attendance
+      where employee_id = v_emp and clock_in < clock_timestamp() - interval '29 hours';
+    raise exception 'rollback_marker';
+  exception when others then
+    if sqlerrm <> 'rollback_marker' then raise; end if;
+  end;
+  perform set_config('role', 'none', true);
+  perform pg_temp.t('stage 3', 'a shift open for 30 hours cannot be closed by the employee',
+    e_stale_out = 'not_clocked_in' and stale_closed = false);
+  perform pg_temp.t('stage 3', 'a missed time-out is flagged and does not block the next clock-in',
+    stale_flagged = true and r_new.clock_out is null and r_new.employee_id = v_emp);
+
+  -- D. A deactivated employee
+  begin
+    update public.employees set active = false where id = v_emp;
+    perform pg_temp.act_as(p_employee);
+    e_inactive := pg_temp.msg('select public.clock_in()');
+    raise exception 'rollback_marker';
+  exception when others then
+    if sqlerrm <> 'rollback_marker' then raise; end if;
+  end;
+  perform set_config('role', 'none', true);
+  perform pg_temp.t('stage 3', 'a deactivated employee cannot clock in', e_inactive = 'no_employee');
+
+  -- E. The work date is the BRANCH's calendar day (two far-apart time zones)
+  begin
+    delete from public.attendance where employee_id = v_emp;   -- sample history would clash with some dates
+    update public.branches set timezone = 'Pacific/Kiritimati' where id = v_branch;
+    perform pg_temp.act_as(p_employee);
+    select * into r_k from public.clock_in();
+    raise exception 'rollback_marker';
+  exception when others then
+    if sqlerrm <> 'rollback_marker' then raise; end if;
+  end;
+  perform set_config('role', 'none', true);
+  begin
+    delete from public.attendance where employee_id = v_emp;   -- sample history would clash with some dates
+    update public.branches set timezone = 'Pacific/Pago_Pago' where id = v_branch;
+    perform pg_temp.act_as(p_employee);
+    select * into r_p from public.clock_in();
+    raise exception 'rollback_marker';
+  exception when others then
+    if sqlerrm <> 'rollback_marker' then raise; end if;
+  end;
+  perform set_config('role', 'none', true);
+  tz_k := (r_k.clock_in at time zone 'Pacific/Kiritimati')::date;
+  tz_p := (r_p.clock_in at time zone 'Pacific/Pago_Pago')::date;
+  perform pg_temp.t('stage 3', 'work date follows the branch time zone',
+    r_k.work_date = tz_k and r_p.work_date = tz_p and r_k.work_date <> r_p.work_date);
+
+  -- F. Email lock
+  e_locked := pg_temp.msg($q$ update public.employees set email = 'changed@hirara.demo' where email = 'maria@hirara.demo' $q$);
+  e_free   := pg_temp.msg($q$ update public.employees set email = 'mark.new@hirara.demo' where email = 'mark@hirara.demo' $q$);
+  -- (the update on Mark is permanent unless undone)
+  update public.employees set email = 'mark@hirara.demo' where email = 'mark.new@hirara.demo';
+  perform pg_temp.t('stage 3', 'an email cannot change while the employee has a login', e_locked = 'email_locked');
+  perform pg_temp.t('stage 3', 'an email can change when the employee has no login', e_free = 'ok');
+
+  -- G. server_time
+  perform pg_temp.act_as(p_employee);
+  select abs(extract(epoch from (public.server_time() - clock_timestamp()))) into st_diff;
+  perform pg_temp.t('stage 3', 'server_time returns the database clock', st_diff < 5);
+
+  perform set_config('role', 'none', true);
+  perform set_config('request.jwt.claim.sub', '', true);
+  perform set_config('request.jwt.claims', '', true);
+end
+$fn$;
+
 -- ---------- Run everything ----------
 select pg_temp.run_constraints();
 select pg_temp.run_admin('admin@hirara.demo');
@@ -494,6 +745,8 @@ select pg_temp.run_employee('john@hirara.demo', 'maria@hirara.demo');
 select pg_temp.run_corrections('maria@hirara.demo', 'paolo@hirara.demo', 'john@hirara.demo', 'admin@hirara.demo');
 select pg_temp.run_lockout('admin@hirara.demo', 'maria@hirara.demo');
 select pg_temp.run_anon();
+select pg_temp.run_stage2('admin@hirara.demo', 'paolo@hirara.demo', 'maria@hirara.demo', 'john@hirara.demo');
+select pg_temp.run_stage3('admin@hirara.demo', 'paolo@hirara.demo', 'maria@hirara.demo', 'john@hirara.demo');
 
 -- ---------- Report (the last statement, so the editor shows it) ----------
 select result, area, label
